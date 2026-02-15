@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-get-my-name"
+description = "Allows reading the current username"
+commands.allow = ["get_my_name"]
+
+[[permission]]
+identifier = "allow-update-my-name"
+description = "Allows updating the username"
+commands.allow = ["update_my_name"]

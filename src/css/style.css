@@ -1,0 +1,165 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+h1 {
+    margin: 0;
+    color: #333;
+    font-size: 24px;
+}
+
+h2 {
+    color: #555;
+    font-size: 18px;
+    margin-bottom: 15px;
+}
+
+#edit-name-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.3s;
+}
+
+#edit-name-btn:hover {
+    background: #5568d3;
+}
+
+.edit-panel {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border: 1px solid #e0e0e0;
+}
+
+#new-name-input {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 16px;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+    transition: border-color 0.3s;
+}
+
+#new-name-input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+}
+
+.button-group button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+#save-name-btn {
+    background: #28a745;
+    color: white;
+}
+
+#save-name-btn:hover:not(:disabled) {
+    background: #218838;
+}
+
+#save-name-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+#cancel-name-btn {
+    background: #6c757d;
+    color: white;
+}
+
+#cancel-name-btn:hover {
+    background: #5a6268;
+}
+
+.error-msg {
+    color: #dc3545;
+    font-size: 14px;
+    margin-top: 10px;
+    min-height: 20px;
+}
+
+.user-list-container {
+    margin-top: 20px;
+}
+
+#user-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#user-list li {
+    background: #f8f9fa;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.3s;
+}
+
+#user-list li:hover {
+    background: #e9ecef;
+}
+
+.user-name {
+    font-weight: 600;
+    color: #333;
+}
+
+.user-addr {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+#user-list:empty::after {
+    content: "暂无在线用户";
+    display: block;
+    text-align: center;
+    color: #999;
+    padding: 20px;
+    font-style: italic;
+}

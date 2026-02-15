@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/style.css">
+    <title>LANChat</title>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 id="my-name">正在加载...</h1>
+            <button id="edit-name-btn">✏️ 改名</button>
+        </div>
+        
+        <div id="edit-name-panel" class="edit-panel" style="display: none;">
+            <input type="text" id="new-name-input" placeholder="输入新名字" maxlength="50">
+            <div class="button-group">
+                <button id="save-name-btn">保存</button>
+                <button id="cancel-name-btn">取消</button>
+            </div>
+            <div id="error-msg" class="error-msg"></div>
+        </div>
+        
+        <div class="user-list-container">
+            <h2>在线用户</h2>
+            <ul id="user-list"></ul>
+        </div>
+    </div>
+    
+    <!-- 引入 JS -->
+    <script src="js/api.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
