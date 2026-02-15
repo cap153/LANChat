@@ -13,19 +13,24 @@ LANChat 支持两种运行模式：
 ### 编译桌面端
 ```bash
 cd src-tauri
-cargo build --bin lanchat
+cargo build --bin lanchat --features desktop
 ```
 
 ### 编译 Web 端
 ```bash
 cd src-tauri
-cargo build --bin lanchat-web
+cargo build --bin lanchat-web --features web --no-default-features
 ```
 
 ### 编译 Release 版本
 ```bash
+# 桌面端
 cd src-tauri
-cargo build --release --bin lanchat-web
+cargo build --release --bin lanchat --features desktop
+
+# Web 端（精简版，无 GUI 依赖）
+cd src-tauri
+cargo build --release --bin lanchat-web --features web --no-default-features
 ```
 
 ## 运行 Web 端

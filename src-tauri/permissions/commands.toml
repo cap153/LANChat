@@ -7,3 +7,8 @@ commands.allow = ["get_my_name"]
 identifier = "allow-update-my-name"
 description = "Allows updating the username"
 commands.allow = ["update_my_name"]
+
+[[permission]]
+identifier = "allow-get-peers"
+description = "Allows getting the list of online peers"
+commands.allow = ["get_peers"]

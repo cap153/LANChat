@@ -145,6 +145,15 @@ h2 {
     background: #e9ecef;
 }
 
+#user-list li.offline {
+    background: #fff3cd;
+    opacity: 0.7;
+}
+
+#user-list li.offline:hover {
+    background: #ffe69c;
+}
+
 .user-name {
     font-weight: 600;
     color: #333;
@@ -153,6 +162,13 @@ h2 {
 .user-addr {
     color: #6c757d;
     font-size: 14px;
+}
+
+.user-status {
+    color: #856404;
+    font-size: 12px;
+    font-style: italic;
+    margin-left: 10px;
 }
 
 #user-list:empty::after {

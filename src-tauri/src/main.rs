@@ -1,6 +1,8 @@
 // src/main.rs
 
 use lanchat::db;
+use lanchat::peers::PeerManager;
+use std::sync::Arc;
 use tauri::Manager;
 
 fn main() {
@@ -12,7 +14,8 @@ fn main() {
         // --- 重点：添加下面这段代码 ---
         .invoke_handler(tauri::generate_handler![
             lanchat::commands::get_my_name,
-            lanchat::commands::update_my_name
+            lanchat::commands::update_my_name,
+            lanchat::commands::get_peers
         ])
         // --------------------------
         .setup(|app| {
@@ -25,21 +28,37 @@ fn main() {
                 let my_name = db::get_username(&pool)
                     .await
                     .unwrap_or_else(|_| "Unknown".into());
+                
+                let my_id = db::get_user_id(&pool)
+                    .await
+                    .expect("无法获取或生成用户 ID");
 
                 handle.manage(db::DbState { pool });
                 println!("[Main] 我的用户名: {}", my_name);
+                println!("[Main] 我的 ID: {}", my_id);
 
-                let h1 = handle.clone();
-                let name1 = my_name.clone();
-                tokio::spawn(async move {
-                    println!("[Main] 开启监听线程...");
-                    lanchat::network::discovery::start_listening(port, name1, Some(h1)).await;
+                // 创建全局用户管理器
+                let peer_manager = Arc::new(PeerManager::new());
+                
+                // 将 PeerManager 注册到 Tauri 状态管理
+                handle.manage(lanchat::commands::PeerState {
+                    manager: peer_manager.clone(),
                 });
 
+                let h1 = handle.clone();
+                let id1 = my_id.clone();
+                let name1 = my_name.clone();
+                let peer_manager_clone = peer_manager.clone();
+                tokio::spawn(async move {
+                    println!("[Main] 开启监听线程...");
+                    lanchat::network::discovery::start_listening(port, id1, name1, Some(h1), peer_manager_clone).await;
+                });
+
+                let id2 = my_id.clone();
                 let name2 = my_name.clone();
                 tokio::spawn(async move {
                     println!("[Main] 开启广播线程...");
-                    lanchat::network::discovery::start_announcing(port, name2).await;
+                    lanchat::network::discovery::start_announcing(port, id2, name2).await;
                 });
             });
             Ok(())

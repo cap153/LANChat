@@ -1,6 +1,9 @@
 use clap::Parser;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio;
+
+use lanchat::peers::PeerManager;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -23,28 +26,41 @@ async fn main() {
         .await
         .expect("数据库初始化失败");
     
-    // 从数据库读取用户名
+    // 从数据库读取用户名和 ID
     let my_name = lanchat::db::get_username(&pool)
         .await
         .unwrap_or_else(|_| "Web-User".to_string());
     
+    let my_id = lanchat::db::get_user_id(&pool)
+        .await
+        .expect("无法获取或生成用户 ID");
+    
     println!("[Server Main] 我的用户名: {}", my_name);
+    println!("[Server Main] 我的 ID: {}", my_id);
+
+    // 创建全局用户管理器
+    let peer_manager = Arc::new(PeerManager::new());
 
     // 1. 启动 Web 服务 (TCP)
     let pool_clone = pool.clone();
+    let peer_manager_clone = peer_manager.clone();
     tokio::spawn(async move {
-        lanchat::web_server::start_server(port, port, pool_clone).await;
+        lanchat::web_server::start_server(port, port, pool_clone, peer_manager_clone).await;
     });
 
     // 2. 启动 UDP 监听
+    let listen_id = my_id.clone();
     let listen_name = my_name.clone();
+    let peer_manager_clone = peer_manager.clone();
     tokio::spawn(async move {
-        lanchat::network::discovery::start_listening(port, listen_name, None).await;
+        lanchat::network::discovery::start_listening(port, listen_id, listen_name, peer_manager_clone).await;
     });
 
     // 3. 启动 UDP 广播
+    let announce_id = my_id.clone();
+    let announce_name = my_name.clone();
     tokio::spawn(async move {
-        lanchat::network::discovery::start_announcing(port, my_name).await;
+        lanchat::network::discovery::start_announcing(port, announce_id, announce_name).await;
     });
 
     println!("[Server Main] Web 服务器已启动，端口: {}", port);

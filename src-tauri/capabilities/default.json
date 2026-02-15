@@ -15,6 +15,7 @@
     "log:default",
     "shell:default",
     "allow-get-my-name",
-    "allow-update-my-name"
+    "allow-update-my-name",
+    "allow-get-peers"
   ]
 }

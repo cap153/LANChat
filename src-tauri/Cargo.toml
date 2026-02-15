@@ -11,34 +11,41 @@ name = "lanchat"
 [[bin]]
 name = "lanchat"
 path = "src/main.rs"
+required-features = ["desktop"]
 
 [[bin]]
 name = "lanchat-web"
 path = "src/server_main.rs"
+required-features = ["web"]
+
+[features]
+default = ["desktop"]
+desktop = ["tauri", "tauri-plugin-shell", "tauri-plugin-fs", "tauri-plugin-dialog", "tauri-plugin-sql", "tauri-plugin-log", "tauri-build"]
+web = []
 
 [build-dependencies]
-tauri-build = { version = "2.0", features = [] }
+tauri-build = { version = "2.0", features = [], optional = true }
 
 [dependencies]
-# 核心
-tauri = { version = "2.0", features = [] }
-tauri-plugin-shell = "2.0"
-tauri-plugin-fs = "2.0"
-tauri-plugin-dialog = "2.0"
-tauri-plugin-sql = { version = "2.0", features = ["sqlite"] }
-tauri-plugin-log = "2.0"
-log = "0.4" # 修复编译错误
+# 核心 - 仅桌面端需要
+tauri = { version = "2.0", features = [], optional = true }
+tauri-plugin-shell = { version = "2.0", optional = true }
+tauri-plugin-fs = { version = "2.0", optional = true }
+tauri-plugin-dialog = { version = "2.0", optional = true }
+tauri-plugin-sql = { version = "2.0", features = ["sqlite"], optional = true }
+tauri-plugin-log = { version = "2.0", optional = true }
+log = "0.4"
 
-# 数据库
+# 数据库 - 两端都需要
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros"] }
 
-# Web 服务器
+# Web 服务器 - 两端都需要
 axum = "0.7"
 tower-http = { version = "0.5", features = ["fs", "cors"] }
 clap = { version = "4.4", features = ["derive"] }
-rust-embed = "8.0" # 用于打包前端资源
+rust-embed = "8.0"
 
-# 工具
+# 工具 - 两端都需要
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

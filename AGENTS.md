@@ -502,13 +502,13 @@ Everything can be inlined into the tauri.conf.json but even a little more advanc
 
 ```bash
 # 桌面端
-cd src-tauri && cargo build --bin lanchat
+cd src-tauri && cargo build --bin lanchat --features desktop
 
-# Web 端
-cd src-tauri && cargo build --bin lanchat-web
+# Web 端（精简版，无 WebKit 等 GUI 依赖）
+cd src-tauri && cargo build --bin lanchat-web --features web --no-default-features
 
 # Release 版本
-cd src-tauri && cargo build --release --bin lanchat-web
+cd src-tauri && cargo build --release --bin lanchat-web --features web --no-default-features
 ```
 
 ### 运行示例
@@ -531,3 +531,51 @@ cd src-tauri && cargo build --release --bin lanchat-web
 3. 完善聊天界面 UI
 4. 添加消息历史记录查询
 5. 实现设置页面（端口配置、自动接收等）
+
+
+---
+
+## 开发进度更新 (2025-02-15 - 用户列表实时更新)
+
+### 已完成功能
+
+#### 1. 在线用户列表管理 ✅
+- **后端实现**:
+  - 创建 `peers.rs` 模块,实现 `PeerManager` 管理在线用户
+  - 支持添加/更新用户、获取活跃用户、清理过期用户
+  - 用户 30 秒内活跃视为在线,60 秒后自动清理
+  
+- **桌面端**:
+  - 继续使用 Tauri 事件系统 (`emit("new-peer")`)
+  - 前端通过 `apiListen` 实时接收新用户事件
+  - 用户列表实时更新
+  
+- **Web 端**:
+  - 添加 `/api/get_peers` API 接口
+  - 前端每 3 秒轮询一次用户列表
+  - 自动更新用户列表显示
+
+#### 2. 编译优化 ✅
+- 修复了 `build.rs` 的条件编译问题
+- 修复了 `Cargo.toml` 中 `tauri-build` 的 feature 配置
+- Web 端和桌面端都能正常编译
+- Web 端无 GUI 依赖,桌面端包含完整 GUI 库
+
+### 技术细节
+
+- **PeerManager**: 使用 `Arc<RwLock<HashMap>>` 实现线程安全的用户列表
+- **Web 端轮询**: 使用 `setInterval` 每 3 秒请求一次 `/api/get_peers`
+- **桌面端事件**: 使用 Tauri 的 `emit` 和 `listen` 实现实时通信
+- **去重逻辑**: 前端 `addUserToList` 检查 `data-addr` 避免重复添加
+
+### 文件变更
+
+- 新增: `src-tauri/src/peers.rs` (用户管理模块)
+- 修改: `src-tauri/src/lib.rs` (添加 peers 模块)
+- 修改: `src-tauri/src/network/discovery.rs` (集成 PeerManager)
+- 修改: `src-tauri/src/web_server.rs` (添加 get_peers API)
+- 修改: `src-tauri/src/server_main.rs` (使用 PeerManager)
+- 修改: `src-tauri/src/main.rs` (桌面端使用 PeerManager)
+- 修改: `src/js/api.js` (添加 apiGetPeers 函数)
+- 修改: `src/js/app.js` (添加轮询逻辑)
+- 新增: `verify-build.sh` (编译验证脚本)

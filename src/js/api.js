@@ -70,3 +70,28 @@ async function apiListen(eventName, callback) {
         return () => {}; // 返回空函数
     }
 }
+
+// 获取在线用户列表（仅 Web 端使用）
+async function apiGetPeers() {
+    const tauri = getTauri();
+    
+    if (tauri) {
+        // 桌面端通过 Tauri 命令获取
+        try {
+            return await tauri.core.invoke('get_peers');
+        } catch (e) {
+            console.error("[JS-API] 桌面端获取用户列表失败:", e);
+            return [];
+        }
+    } else {
+        // Web 端通过 HTTP 轮询
+        try {
+            const resp = await fetch('/api/get_peers');
+            const peers = await resp.json();
+            return peers;
+        } catch (e) {
+            console.error("[JS-API] 获取用户列表失败:", e);
+            return [];
+        }
+    }
+}

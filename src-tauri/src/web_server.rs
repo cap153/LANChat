@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 use std::sync::Arc;
 
+use crate::peers::PeerManager;
+
 #[derive(RustEmbed)]
 #[folder = "../src/"]
 struct Asset;
@@ -34,16 +36,18 @@ struct ErrorResponse {
 #[derive(Clone)]
 pub struct AppState {
     pub pool: Pool<Sqlite>,
+    pub peer_manager: Arc<PeerManager>,
 }
 
-pub async fn start_server(port: u16, _udp_port: u16, pool: Pool<Sqlite>) {
-    let state = Arc::new(AppState { pool });
+pub async fn start_server(port: u16, _udp_port: u16, pool: Pool<Sqlite>, peer_manager: Arc<PeerManager>) {
+    let state = Arc::new(AppState { pool, peer_manager });
     
     let app = Router::new()
         .route("/", get(serve_index))
         .route("/*path", get(serve_assets))
         .route("/api/get_my_name", get(get_name_http))
         .route("/api/update_my_name", post(update_name_http))
+        .route("/api/get_peers", get(get_peers_http))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
@@ -86,6 +90,12 @@ async fn update_name_http(
         )
             .into_response(),
     }
+}
+
+async fn get_peers_http(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    // 不打印日志,避免刷屏
+    let peers = state.peer_manager.get_all_peers();
+    Json(peers).into_response()
 }
 
 async fn serve_index() -> impl IntoResponse {

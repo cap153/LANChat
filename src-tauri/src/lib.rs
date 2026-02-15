@@ -2,9 +2,12 @@ pub mod commands;
 pub mod db;
 pub mod models;
 pub mod network;
+pub mod peers;
 pub mod utils;
 pub mod web_server;
 
+// 仅在桌面端编译时包含 Tauri 运行函数
+#[cfg(feature = "desktop")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

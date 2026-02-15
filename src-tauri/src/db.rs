@@ -1,7 +1,10 @@
 use crate::utils::generate_random_name;
 use sqlx::{sqlite::SqlitePool, Pool, Sqlite};
 use std::path::PathBuf;
+
+#[cfg(feature = "desktop")]
 use tauri::AppHandle;
+#[cfg(feature = "desktop")]
 use tauri::Manager;
 
 pub struct DbState {
@@ -19,6 +22,29 @@ pub async fn get_username(pool: &sqlx::Pool<sqlx::Sqlite>) -> Result<String, Str
         })?;
     println!("[DB] 读取成功: {}", res.0);
     Ok(res.0)
+}
+
+pub async fn get_user_id(pool: &sqlx::Pool<sqlx::Sqlite>) -> Result<String, String> {
+    let res: Result<(String,), _> = sqlx::query_as("SELECT value FROM settings WHERE key = 'user_id'")
+        .fetch_one(pool)
+        .await;
+    
+    match res {
+        Ok((id,)) => Ok(id),
+        Err(_) => {
+            // 如果没有 user_id,生成一个并保存
+            let user_id = uuid::Uuid::new_v4().to_string();
+            println!("[DB] 生成并保存新的用户 ID: {}", user_id);
+            
+            sqlx::query("INSERT INTO settings (key, value) VALUES ('user_id', ?)")
+                .bind(&user_id)
+                .execute(pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            
+            Ok(user_id)
+        }
+    }
 }
 
 pub async fn update_username(pool: &sqlx::Pool<sqlx::Sqlite>, new_name: String) -> Result<(), String> {
@@ -48,6 +74,7 @@ pub async fn update_username(pool: &sqlx::Pool<sqlx::Sqlite>, new_name: String) 
 }
 
 // 为 Tauri 桌面端初始化数据库
+#[cfg(feature = "desktop")]
 pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, sqlx::Error> {
     let app_dir = app_handle.path().app_data_dir().expect("读取路径失败");
     init_db_with_path(app_dir).await
@@ -118,8 +145,17 @@ async fn init_db_with_path(app_dir: PathBuf) -> Result<Pool<Sqlite>, sqlx::Error
         let random_name = generate_random_name();
         println!("[DB] 生成随机用户名: {}", random_name);
         
+        // 生成唯一的 UUID
+        let user_id = uuid::Uuid::new_v4().to_string();
+        println!("[DB] 生成用户 ID: {}", user_id);
+        
         sqlx::query("INSERT INTO settings (key, value) VALUES ('username', ?)")
             .bind(random_name)
+            .execute(&pool)
+            .await?;
+
+        sqlx::query("INSERT INTO settings (key, value) VALUES ('user_id', ?)")
+            .bind(user_id)
             .execute(&pool)
             .await?;
 

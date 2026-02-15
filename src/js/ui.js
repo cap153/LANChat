@@ -74,25 +74,84 @@ function initNameEditor() {
 }
 
 // 添加新用户到列表
-function addUserToList(name, addr) {
+function addUserToList(id, name, addr, isOffline = false) {
     const list = document.getElementById('user-list');
     if (!list) return;
     
     // 检查是否已存在
     const existingItems = list.querySelectorAll('li');
     for (let item of existingItems) {
-        if (item.dataset.addr === addr) {
-            return; // 已存在，不重复添加
+        if (item.dataset.id === id) {
+            // 已存在,更新状态
+            updateUserStatus(item, name, addr, isOffline);
+            return;
         }
     }
     
+    // 不存在,创建新的
     const li = document.createElement('li');
-    li.dataset.addr = addr;
+    li.dataset.id = id;
     li.innerHTML = `
         <span class="user-name">${name}</span>
         <span class="user-addr">${addr}</span>
+        <span class="user-status">${isOffline ? 'offline' : ''}</span>
     `;
+    
+    if (isOffline) {
+        li.classList.add('offline');
+    }
+    
     list.appendChild(li);
     
-    console.log('[UI] 添加用户到列表:', name, addr);
+    console.log('[UI] 添加用户到列表:', name, id, isOffline ? '(离线)' : '(在线)');
+}
+
+// 更新用户状态
+function updateUserStatus(item, name, addr, isOffline) {
+    const statusSpan = item.querySelector('.user-status');
+    const nameSpan = item.querySelector('.user-name');
+    const addrSpan = item.querySelector('.user-addr');
+    
+    // 更新名字（可能改名了）
+    if (nameSpan) {
+        nameSpan.textContent = name;
+    }
+    
+    // 更新地址（可能 IP 变了）
+    if (addrSpan) {
+        addrSpan.textContent = addr;
+    }
+    
+    // 更新离线状态
+    if (statusSpan) {
+        statusSpan.textContent = isOffline ? 'offline' : '';
+    }
+    
+    if (isOffline) {
+        if (!item.classList.contains('offline')) {
+            console.log('[UI] 用户离线:', name);
+        }
+        item.classList.add('offline');
+    } else {
+        if (item.classList.contains('offline')) {
+            console.log('[UI] 用户重新上线:', name);
+        }
+        item.classList.remove('offline');
+    }
+}
+
+// 从列表中移除用户
+function removeUserFromList(id) {
+    const list = document.getElementById('user-list');
+    if (!list) return;
+    
+    const items = list.querySelectorAll('li');
+    for (let item of items) {
+        if (item.dataset.id === id) {
+            const name = item.querySelector('.user-name').textContent;
+            item.remove();
+            console.log('[UI] 移除用户:', name, id);
+            return;
+        }
+    }
 }
