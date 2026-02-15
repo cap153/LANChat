@@ -16,6 +16,9 @@
     "shell:default",
     "allow-get-my-name",
     "allow-update-my-name",
-    "allow-get-peers"
+    "allow-get-peers",
+    "allow-send-message",
+    "allow-get-chat-history",
+    "allow-send-file"
   ]
 }

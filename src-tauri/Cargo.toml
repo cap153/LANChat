@@ -40,8 +40,10 @@ log = "0.4"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros"] }
 
 # Web 服务器 - 两端都需要
-axum = "0.7"
+axum = { version = "0.7", features = ["ws", "multipart"] }
 tower-http = { version = "0.5", features = ["fs", "cors"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
 clap = { version = "4.4", features = ["derive"] }
 rust-embed = "8.0"
 
@@ -55,5 +57,6 @@ rand = "0.8"
 mime_guess = "2.0.5"
 socket2 = { version = "0.5", features = ["all"] }
 directories = "5.0"
+reqwest = { version = "0.12", features = ["multipart", "json"] }
 
 

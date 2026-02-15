@@ -12,3 +12,17 @@ commands.allow = ["update_my_name"]
 identifier = "allow-get-peers"
 description = "Allows getting the list of online peers"
 commands.allow = ["get_peers"]
+
+[[permission]]
+identifier = "allow-send-message"
+description = "Allows sending text messages"
+commands.allow = ["send_message"]
+
+[[permission]]
+identifier = "allow-get-chat-history"
+description = "Allows getting chat history"
+commands.allow = ["get_chat_history"]
+[[permission]]
+identifier = "allow-send-file"
+description = "Allows sending files to peers"
+commands.allow = ["send_file"]

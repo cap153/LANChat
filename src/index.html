@@ -22,9 +22,25 @@
             <div id="error-msg" class="error-msg"></div>
         </div>
         
-        <div class="user-list-container">
-            <h2>在线用户</h2>
-            <ul id="user-list"></ul>
+        <div class="main-content">
+            <div class="user-list-container">
+                <h2>在线用户</h2>
+                <ul id="user-list"></ul>
+            </div>
+            
+            <div class="chat-container" id="chat-container" style="display: none;">
+                <div class="chat-header">
+                    <span id="chat-with-name">选择用户开始聊天</span>
+                    <button id="close-chat-btn">✕</button>
+                </div>
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input-container">
+                    <input type="file" id="file-input" style="display: none;" />
+                    <button id="attach-file-btn" title="发送文件">📎</button>
+                    <input type="text" id="chat-input" placeholder="输入消息..." />
+                    <button id="send-btn">发送</button>
+                </div>
+            </div>
         </div>
     </div>
     

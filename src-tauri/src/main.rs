@@ -14,8 +14,12 @@ fn main() {
         // --- 重点：添加下面这段代码 ---
         .invoke_handler(tauri::generate_handler![
             lanchat::commands::get_my_name,
+            lanchat::commands::get_my_id,
             lanchat::commands::update_my_name,
-            lanchat::commands::get_peers
+            lanchat::commands::get_peers,
+            lanchat::commands::send_message,
+            lanchat::commands::get_chat_history,
+            lanchat::commands::send_file
         ])
         // --------------------------
         .setup(|app| {
@@ -33,7 +37,7 @@ fn main() {
                     .await
                     .expect("无法获取或生成用户 ID");
 
-                handle.manage(db::DbState { pool });
+                handle.manage(db::DbState { pool: pool.clone() });
                 println!("[Main] 我的用户名: {}", my_name);
                 println!("[Main] 我的 ID: {}", my_id);
 
@@ -59,6 +63,15 @@ fn main() {
                 tokio::spawn(async move {
                     println!("[Main] 开启广播线程...");
                     lanchat::network::discovery::start_announcing(port, id2, name2).await;
+                });
+
+                // 桌面端也启动 HTTP 服务器（用于接收文件和 WebSocket 消息）
+                let pool_clone = pool.clone();
+                let peer_manager_clone = peer_manager.clone();
+                let handle_clone = handle.clone();
+                tokio::spawn(async move {
+                    println!("[Main] 启动 HTTP 服务器在端口 {}...", port);
+                    lanchat::web_server::start_server(port, port, pool_clone, peer_manager_clone, Some(handle_clone)).await;
                 });
             });
             Ok(())

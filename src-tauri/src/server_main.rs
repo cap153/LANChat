@@ -63,8 +63,11 @@ async fn main() {
         lanchat::network::discovery::start_announcing(port, announce_id, announce_name).await;
     });
 
-    println!("[Server Main] Web 服务器已启动，端口: {}", port);
-    println!("[Server Main] 访问 http://localhost:{}", port);
+    println!("[Server Main] ========================================");
+    println!("[Server Main] Web 服务器: http://localhost:{}", port);
+    println!("[Server Main] WebSocket: ws://localhost:{}/ws", port);
+    println!("[Server Main] UDP 广播端口: {}", port);
+    println!("[Server Main] ========================================");
 
     // 防止主线程退出
     loop {
