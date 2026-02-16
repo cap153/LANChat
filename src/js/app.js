@@ -120,7 +120,7 @@ async function startMessagePolling() {
             // 如果有变化，刷新整个聊天历史
             if (hasChanges) {
                 console.log('[JS-App] 检测到消息变化，刷新聊天历史');
-                await loadChatHistory(window.currentChatPeer.id);
+                await loadChatHistory(window.currentChatPeer.id, true); // 保持滚动位置
             }
         } catch (e) {
             console.error('[JS-App] 轮询消息失败:', e);

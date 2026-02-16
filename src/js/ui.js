@@ -292,6 +292,10 @@ async function sendMessage() {
             timestamp: Date.now() / 1000
         }, true);
         
+        // 发送消息后滚动到底部
+        const chatMessages = document.getElementById('chat-messages');
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        
         console.log('[UI] 发送消息:', content);
     } catch (e) {
         console.error('[UI] 发送消息失败:', e);
@@ -364,18 +368,23 @@ function addMessageToChat(message, isSent) {
     messageDiv.appendChild(timeDiv);
     chatMessages.appendChild(messageDiv);
     
-    // 滚动到底部
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    // 注意：不在这里自动滚动，由调用者决定是否滚动
     
     console.log('[UI] 消息已添加到聊天窗口');
 }
 
 // 加载聊天历史
-async function loadChatHistory(peerId) {
+async function loadChatHistory(peerId, preserveScroll = false) {
     try {
         const messages = await apiGetChatHistory(peerId);
         
         const chatMessages = document.getElementById('chat-messages');
+        
+        // 保存当前滚动位置
+        const oldScrollTop = chatMessages.scrollTop;
+        const oldScrollHeight = chatMessages.scrollHeight;
+        const wasAtBottom = oldScrollHeight - oldScrollTop - chatMessages.clientHeight < 100;
+        
         chatMessages.innerHTML = '';
         
         for (const msg of messages) {
@@ -384,6 +393,17 @@ async function loadChatHistory(peerId) {
             if (msg.timestamp > (window.lastMessageTimestamp || 0)) {
                 window.lastMessageTimestamp = msg.timestamp;
             }
+        }
+        
+        // 恢复滚动位置
+        if (preserveScroll && !wasAtBottom) {
+            // 如果用户不在底部，尝试保持相对位置
+            const newScrollHeight = chatMessages.scrollHeight;
+            const scrollDiff = newScrollHeight - oldScrollHeight;
+            chatMessages.scrollTop = oldScrollTop + scrollDiff;
+        } else if (!preserveScroll || wasAtBottom) {
+            // 首次加载或用户在底部时，滚动到底部
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
         
         console.log('[UI] 加载了', messages.length, '条历史消息');
@@ -404,13 +424,22 @@ function onReceiveMessage(message) {
         
         // 检查是否是文件状态更新（downloading -> accepted/pending）
         if (message.msg_type === 'file' && message.file_status !== 'downloading') {
-            // 刷新聊天历史以更新状态
+            // 刷新聊天历史以更新状态，保持滚动位置
             console.log('[UI] 文件状态更新 (' + message.file_status + ')，刷新聊天历史');
-            loadChatHistory(window.currentChatPeer.id);
+            loadChatHistory(window.currentChatPeer.id, true);
         } else {
             // 直接显示新消息
             console.log('[UI] 直接显示新消息 (msg_type=' + message.msg_type + ', file_status=' + message.file_status + ')');
+            
+            const chatMessages = document.getElementById('chat-messages');
+            const wasAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+            
             addMessageToChat(message, false);
+            
+            // 只有在底部时才滚动
+            if (wasAtBottom) {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
         }
     } else {
         console.log('[UI] ✗ 不匹配当前聊天对象');
