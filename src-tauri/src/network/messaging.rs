@@ -1,6 +1,5 @@
 // 消息发送和接收模块
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[cfg(feature = "desktop")]
@@ -252,9 +251,10 @@ pub async fn get_chat_history(
     peer_id: &str,
     limit: i32,
 ) -> Result<Vec<serde_json::Value>, String> {
-    // 查询与指定用户的所有消息(发送给对方的和从对方收到的)
-    let rows = sqlx::query(
-        "SELECT sender_id, content, msg_type, timestamp, file_path, file_status FROM messages 
+    // 使用 query_as 直接映射到 Message 结构体
+    let messages = sqlx::query_as::<_, crate::models::Message>(
+        "SELECT id, sender_id, content, msg_type, timestamp, file_path, file_status 
+         FROM messages 
          WHERE sender_id = ? OR sender_id = 'me'
          ORDER BY timestamp ASC LIMIT ?"
     )
@@ -264,52 +264,14 @@ pub async fn get_chat_history(
     .await
     .map_err(|e| format!("查询历史失败: {}", e))?;
     
-    let mut messages = Vec::new();
-    for row in rows {
-        let sender_id: String = row.get("sender_id");
-        let content: String = row.get("content");
-        let msg_type: Option<String> = row.try_get("msg_type").ok();
-        let timestamp: i64 = row.get("timestamp");
-        let file_path: Option<String> = row.try_get("file_path").ok();
-        let file_status: Option<String> = row.try_get("file_status").ok();
-        
-        let mut msg = serde_json::json!({
-            "from_id": sender_id,
-            "content": content,
-            "timestamp": timestamp,
-            "msg_type": msg_type.unwrap_or_else(|| "text".to_string()),
-        });
-        
-        // 如果是文件消息,添加文件信息
-        if msg["msg_type"] == "file" {
-            if let Some(path) = file_path {
-                // 从路径提取文件 ID (UUID 部分，在第一个 _ 之前)
-                let filename = std::path::Path::new(&path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("");
-                
-                // 提取 UUID (格式: UUID_filename)
-                let file_id = filename.split('_').next().unwrap_or(filename);
-                
-                msg["file_id"] = serde_json::json!(file_id);
-                msg["file_name"] = serde_json::json!(content);  // content 存储的是文件名
-                msg["file_path"] = serde_json::json!(path);     // 完整路径
-                
-                // file_status 存储的是 "pending"、"accepted" 或 "sent"
-                if let Some(status) = file_status {
-                    msg["file_status"] = serde_json::json!(status);
-                }
-                
-                // 尝试获取文件大小
-                if let Ok(metadata) = std::fs::metadata(&path) {
-                    msg["file_size"] = serde_json::json!(metadata.len());
-                }
-            }
-        }
-        
-        messages.push(msg);
-    }
+    // 转换为 MessageResponse 并序列化为 JSON
+    let responses: Vec<serde_json::Value> = messages
+        .into_iter()
+        .map(|msg| {
+            let response = crate::models::MessageResponse::from(msg);
+            serde_json::to_value(response).unwrap_or(serde_json::json!({}))
+        })
+        .collect();
     
-    Ok(messages)
+    Ok(responses)
 }
