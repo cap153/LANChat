@@ -34,11 +34,9 @@ pub async fn get_settings(state: State<'_, DbState>) -> Result<serde_json::Value
     println!("[Command] 收到前端请求: get_settings");
     
     let download_path = crate::db::get_download_path(&state.pool).await?;
-    let auto_accept = crate::db::get_auto_accept(&state.pool).await?;
     
     Ok(serde_json::json!({
         "download_path": download_path,
-        "auto_accept": auto_accept,
     }))
 }
 
@@ -47,16 +45,11 @@ pub async fn get_settings(state: State<'_, DbState>) -> Result<serde_json::Value
 pub async fn update_settings(
     state: State<'_, DbState>,
     download_path: Option<String>,
-    auto_accept: Option<bool>,
 ) -> Result<(), String> {
     println!("[Command] 收到前端请求: update_settings");
     
     if let Some(path) = download_path {
         crate::db::update_download_path(&state.pool, path).await?;
-    }
-    
-    if let Some(accept) = auto_accept {
-        crate::db::update_auto_accept(&state.pool, accept).await?;
     }
     
     Ok(())
@@ -279,88 +272,3 @@ pub async fn send_file(
     }))
 }
 
-
-#[cfg(feature = "desktop")]
-#[tauri::command]
-pub async fn accept_file(
-    state: State<'_, DbState>,
-    file_id: String,
-    save_path: Option<String>,
-) -> Result<String, String> {
-    println!("[Command] 收到接受文件请求: file_id={}", file_id);
-    
-    // 从数据库查询文件信息
-    let row = sqlx::query(
-        "SELECT file_path, content FROM messages WHERE file_path LIKE ? AND file_status = 'pending'"
-    )
-    .bind(format!("%{}%", file_id))
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| format!("查询文件失败: {}", e))?;
-    
-    let row = row.ok_or("文件不存在或已接收")?;
-    
-    use sqlx::Row;
-    let temp_path: String = row.get("file_path");
-    let file_name: String = row.get("content");
-    
-    println!("[Command] 临时路径: {}", temp_path);
-    println!("[Command] 文件名: {}", file_name);
-    
-    // 检查文件是否存在（可能还在上传中）
-    if !std::path::Path::new(&temp_path).exists() {
-        println!("[Command] ⏳ 文件还在下载中");
-        return Err("文件还在下载中，请稍候...".to_string());
-    }
-    
-    // 确定最终保存路径
-    let final_path = if let Some(path) = save_path {
-        // 用户指定了路径
-        std::path::PathBuf::from(path).join(&file_name)
-    } else {
-        // 使用默认下载路径
-        let download_path = crate::db::get_download_path(&state.pool).await?;
-        std::path::PathBuf::from(download_path).join(&file_name)
-    };
-    
-    println!("[Command] 最终路径: {:?}", final_path);
-    
-    // 确保目标目录存在
-    if let Some(parent) = final_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("创建目录失败: {}", e))?;
-    }
-    
-    // 移动文件 - 使用复制+删除来支持跨文件系统
-    println!("[Command] 开始移动文件...");
-    if let Err(e) = std::fs::rename(&temp_path, &final_path) {
-        // rename 失败（可能是跨文件系统），尝试复制+删除
-        println!("[Command] rename 失败 ({}), 尝试复制+删除", e);
-        
-        std::fs::copy(&temp_path, &final_path)
-            .map_err(|e| format!("复制文件失败: {}", e))?;
-        
-        // 复制成功后删除临时文件
-        if let Err(e) = std::fs::remove_file(&temp_path) {
-            println!("[Command] ⚠ 删除临时文件失败: {}", e);
-            // 不返回错误，因为文件已经复制成功了
-        }
-        
-        println!("[Command] ✓ 文件已复制到目标位置");
-    } else {
-        println!("[Command] ✓ 文件已移动到目标位置");
-    }
-    
-    // 更新数据库状态
-    sqlx::query(
-        "UPDATE messages SET file_status = 'accepted', file_path = ? WHERE file_path = ?"
-    )
-    .bind(final_path.to_str().unwrap())
-    .bind(&temp_path)
-    .execute(&state.pool)
-    .await
-    .map_err(|e| format!("更新数据库失败: {}", e))?;
-    
-    println!("[Command] ✓ 文件已接受并保存到: {:?}", final_path);
-    Ok(final_path.to_str().unwrap().to_string())
-}

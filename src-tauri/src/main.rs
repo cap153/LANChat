@@ -21,8 +21,7 @@ fn main() {
             lanchat::commands::get_chat_history,
             lanchat::commands::send_file,
             lanchat::commands::get_settings,
-            lanchat::commands::update_settings,
-            lanchat::commands::accept_file
+            lanchat::commands::update_settings
         ])
         // --------------------------
         .setup(|app| {

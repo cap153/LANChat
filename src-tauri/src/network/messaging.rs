@@ -54,6 +54,9 @@ pub async fn send_text_message(
                 .await
                 .map_err(|e| format!("发送失败: {}", e))?;
             
+            // 优雅地关闭连接
+            let _ = ws_stream.close(None).await;
+            
             println!("[Messaging] 消息发送成功");
             Ok(())
         }

@@ -81,7 +81,7 @@ async function apiGetSettings() {
 }
 
 // 更新设置
-async function apiUpdateSettings(downloadPath, autoAccept) {
+async function apiUpdateSettings(downloadPath) {
     const tauri = getTauri();
     
     if (tauri) {
@@ -89,8 +89,7 @@ async function apiUpdateSettings(downloadPath, autoAccept) {
         try {
             console.log("[JS-API] 通过 Tauri 更新设置");
             return await tauri.core.invoke('update_settings', {
-                downloadPath,
-                autoAccept
+                downloadPath
             });
         } catch (e) {
             console.error("[JS-API] 更新设置失败:", e);
@@ -104,8 +103,7 @@ async function apiUpdateSettings(downloadPath, autoAccept) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    download_path: downloadPath,
-                    auto_accept: autoAccept
+                    download_path: downloadPath
                 })
             });
             const data = await resp.json();
@@ -331,8 +329,8 @@ async function apiSendFile(peerAddr, file) {
             const myId = await apiGetMyId();
             
             const formData = new FormData();
+            formData.append('peer_id', myId);  // 传递发送者的 ID（必须在 file 之前）
             formData.append('file', file);
-            formData.append('peer_id', myId);  // 传递发送者的 ID
             
             // 上传到对方的服务器
             const uploadUrl = `http://${peerAddr}/api/upload`;

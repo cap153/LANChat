@@ -113,33 +113,7 @@ pub async fn update_download_path(pool: &sqlx::Pool<sqlx::Sqlite>, new_path: Str
     Ok(())
 }
 
-// 获取是否自动接收
-pub async fn get_auto_accept(pool: &sqlx::Pool<sqlx::Sqlite>) -> Result<bool, String> {
-    let res: Result<(String,), _> = sqlx::query_as("SELECT value FROM settings WHERE key = 'auto_accept'")
-        .fetch_one(pool)
-        .await;
-    
-    match res {
-        Ok((value,)) => Ok(value == "true"),
-        Err(_) => Ok(false), // 默认不自动接收
-    }
-}
 
-// 更新是否自动接收
-pub async fn update_auto_accept(pool: &sqlx::Pool<sqlx::Sqlite>, auto_accept: bool) -> Result<(), String> {
-    println!("[DB] 正在更新自动接收设置为: {}", auto_accept);
-    
-    let value = if auto_accept { "true" } else { "false" };
-    
-    sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('auto_accept', ?)")
-        .bind(value)
-        .execute(pool)
-        .await
-        .map_err(|e| e.to_string())?;
-    
-    println!("[DB] 自动接收设置更新成功");
-    Ok(())
-}
 
 // 为 Tauri 桌面端初始化数据库
 #[cfg(feature = "desktop")]
@@ -231,10 +205,6 @@ async fn init_db_with_path(app_dir: PathBuf) -> Result<Pool<Sqlite>, sqlx::Error
         let download_dir = std::env::temp_dir().join("lanchat_downloads");
         sqlx::query("INSERT INTO settings (key, value) VALUES ('download_path', ?)")
             .bind(download_dir.to_str().unwrap())
-            .execute(&pool)
-            .await?;
-
-        sqlx::query("INSERT INTO settings (key, value) VALUES ('auto_accept', 'false')")
             .execute(&pool)
             .await?;
     }
