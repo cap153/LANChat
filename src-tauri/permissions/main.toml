@@ -1,7 +1,0 @@
-# 这是一个权限定义
-[[permission]]
-identifier = "allow-get-my-name" # 注意：这里用连字符，不能用下划线
-description = "允许前端获取我的随机用户名"
-commands.allow = [
-    "get_my_name" # 这里写 Rust 里的真实函数名，可以有下划线
-]
