@@ -401,7 +401,6 @@ async function sendFile(file) {
         
         try {
             const result = await apiSendFile(
-                window.currentChatPeer.id,
                 window.currentChatPeer.addr,
                 null  // 桌面端不需要
             );
@@ -432,7 +431,6 @@ async function sendFile(file) {
         
         try {
             const result = await apiSendFile(
-                window.currentChatPeer.id,
                 window.currentChatPeer.addr,
                 file
             );

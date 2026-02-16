@@ -39,7 +39,6 @@ struct ErrorResponse {
 
 #[derive(Deserialize)]
 struct SendMessageRequest {
-    peer_id: String,
     peer_addr: String,
     content: String,
 }

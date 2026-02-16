@@ -92,7 +92,6 @@ pub async fn get_chat_history(
 #[tauri::command]
 pub async fn send_file(
     state: State<'_, DbState>,
-    peer_id: String,
     peer_addr: String,
     file_path: String,
 ) -> Result<serde_json::Value, String> {

@@ -162,7 +162,6 @@ async function apiSendMessage(peerId, peerAddr, content) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    peer_id: peerId, 
                     peer_addr: peerAddr, 
                     content 
                 })
@@ -220,7 +219,7 @@ async function apiGetChatHistory(peerId) {
 
 
 // 发送文件
-async function apiSendFile(peerId, peerAddr, file) {
+async function apiSendFile(peerAddr, file) {
     const tauri = getTauri();
     
     if (tauri) {
@@ -244,7 +243,6 @@ async function apiSendFile(peerId, peerAddr, file) {
             
             // 调用 Tauri 命令发送文件
             const result = await tauri.core.invoke('send_file', {
-                peerId,
                 peerAddr,
                 filePath
             });
