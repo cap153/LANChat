@@ -53,6 +53,73 @@ async function apiGetMyId() {
     }
 }
 
+// 获取设置
+async function apiGetSettings() {
+    const tauri = getTauri();
+    
+    if (tauri) {
+        // 桌面端
+        try {
+            console.log("[JS-API] 通过 Tauri 获取设置");
+            return await tauri.core.invoke('get_settings');
+        } catch (e) {
+            console.error("[JS-API] 获取设置失败:", e);
+            throw new Error("获取设置失败: " + e);
+        }
+    } else {
+        // Web 端
+        try {
+            console.log("[JS-API] 通过 HTTP 获取设置");
+            const resp = await fetch('/api/get_settings');
+            const data = await resp.json();
+            return data;
+        } catch (e) {
+            console.error("[JS-API] 获取设置失败:", e);
+            throw new Error("获取设置失败: " + e);
+        }
+    }
+}
+
+// 更新设置
+async function apiUpdateSettings(downloadPath, autoAccept) {
+    const tauri = getTauri();
+    
+    if (tauri) {
+        // 桌面端
+        try {
+            console.log("[JS-API] 通过 Tauri 更新设置");
+            return await tauri.core.invoke('update_settings', {
+                downloadPath,
+                autoAccept
+            });
+        } catch (e) {
+            console.error("[JS-API] 更新设置失败:", e);
+            throw new Error("更新设置失败: " + e);
+        }
+    } else {
+        // Web 端
+        try {
+            console.log("[JS-API] 通过 HTTP 更新设置");
+            const resp = await fetch('/api/update_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    download_path: downloadPath,
+                    auto_accept: autoAccept
+                })
+            });
+            const data = await resp.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            return data;
+        } catch (e) {
+            console.error("[JS-API] 更新设置失败:", e);
+            throw new Error("更新设置失败: " + e);
+        }
+    }
+}
+
 async function apiUpdateMyName(newName) {
     const tauri = getTauri();
     

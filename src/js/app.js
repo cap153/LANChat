@@ -11,6 +11,9 @@ async function renderPage() {
     // 初始化改名功能
     initNameEditor();
     
+    // 初始化设置功能
+    initSettings();
+    
     // 初始化聊天功能
     initChat();
 

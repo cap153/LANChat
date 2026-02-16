@@ -10,7 +10,10 @@
     <div class="container">
         <div class="header">
             <h1 id="my-name">正在加载...</h1>
-            <button id="edit-name-btn">✏️ 改名</button>
+            <div class="header-buttons">
+                <button id="edit-name-btn">✏️ 改名</button>
+                <button id="settings-btn">⚙️ 设置</button>
+            </div>
         </div>
         
         <div id="edit-name-panel" class="edit-panel" style="display: none;">
@@ -20,6 +23,31 @@
                 <button id="cancel-name-btn">取消</button>
             </div>
             <div id="error-msg" class="error-msg"></div>
+        </div>
+        
+        <div id="settings-panel" class="settings-panel" style="display: none;">
+            <h2>设置</h2>
+            <div class="settings-content">
+                <div class="setting-item">
+                    <label>
+                        <input type="checkbox" id="auto-accept-checkbox">
+                        自动接收文件
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <label for="download-path-input">下载路径:</label>
+                    <div class="path-input-group">
+                        <input type="text" id="download-path-input">
+                        <button id="choose-path-btn">选择</button>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button id="save-settings-btn">保存</button>
+                    <button id="cancel-settings-btn">取消</button>
+                </div>
+                <div id="settings-success-msg" class="success-msg"></div>
+                <div id="settings-error-msg" class="error-msg"></div>
+            </div>
         </div>
         
         <div class="main-content">

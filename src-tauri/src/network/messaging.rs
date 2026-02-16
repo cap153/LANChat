@@ -280,19 +280,27 @@ pub async fn get_chat_history(
         // 如果是文件消息,添加文件信息
         if msg["msg_type"] == "file" {
             if let Some(path) = file_path {
-                // 从路径提取文件 ID
-                let file_id = std::path::Path::new(&path)
+                // 从路径提取文件 ID (UUID 部分，在第一个 _ 之前)
+                let filename = std::path::Path::new(&path)
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("");
+                
+                // 提取 UUID (格式: UUID_filename)
+                let file_id = filename.split('_').next().unwrap_or(filename);
+                
                 msg["file_id"] = serde_json::json!(file_id);
                 msg["file_name"] = serde_json::json!(content);  // content 存储的是文件名
+                msg["file_path"] = serde_json::json!(path);     // 完整路径
                 
-                // file_status 存储的是文件大小
-                if let Some(size_str) = file_status {
-                    if let Ok(size) = size_str.parse::<i64>() {
-                        msg["file_size"] = serde_json::json!(size);
-                    }
+                // file_status 存储的是 "pending"、"accepted" 或 "sent"
+                if let Some(status) = file_status {
+                    msg["file_status"] = serde_json::json!(status);
+                }
+                
+                // 尝试获取文件大小
+                if let Ok(metadata) = std::fs::metadata(&path) {
+                    msg["file_size"] = serde_json::json!(metadata.len());
                 }
             }
         }

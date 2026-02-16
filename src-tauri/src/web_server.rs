@@ -79,10 +79,13 @@ pub async fn start_server(
         .route("/api/get_my_name", get(get_name_http))
         .route("/api/get_my_id", get(get_id_http))
         .route("/api/update_my_name", post(update_name_http))
+        .route("/api/get_settings", get(get_settings_http))
+        .route("/api/update_settings", post(update_settings_http))
         .route("/api/get_peers", get(get_peers_http))
         .route("/api/send_message", post(send_message_http))
         .route("/api/chat_history/:peer_id", get(get_chat_history_http))
         .route("/api/upload", post(upload_file_http))
+        .route("/api/accept_file/:file_id", post(accept_file_http))
         .route("/api/download/:file_id", get(download_file_http))
         .route("/ws", get(websocket_handler))
         .layer(cors)
@@ -124,6 +127,52 @@ async fn get_id_http(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         )
             .into_response(),
     }
+}
+
+async fn get_settings_http(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    println!("[Web Server] 收到获取设置请求");
+    
+    let download_path = crate::db::get_download_path(&state.pool).await
+        .unwrap_or_else(|_| std::env::temp_dir().join("lanchat_downloads").to_str().unwrap().to_string());
+    let auto_accept = crate::db::get_auto_accept(&state.pool).await.unwrap_or(false);
+    
+    Json(serde_json::json!({
+        "download_path": download_path,
+        "auto_accept": auto_accept,
+    })).into_response()
+}
+
+#[derive(Deserialize)]
+struct UpdateSettingsRequest {
+    download_path: Option<String>,
+    auto_accept: Option<bool>,
+}
+
+async fn update_settings_http(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<UpdateSettingsRequest>,
+) -> impl IntoResponse {
+    println!("[Web Server] 收到更新设置请求");
+    
+    if let Some(path) = payload.download_path {
+        if let Err(e) = crate::db::update_download_path(&state.pool, path).await {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse { error: e }),
+            ).into_response();
+        }
+    }
+    
+    if let Some(accept) = payload.auto_accept {
+        if let Err(e) = crate::db::update_auto_accept(&state.pool, accept).await {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse { error: e }),
+            ).into_response();
+        }
+    }
+    
+    Json(serde_json::json!({ "success": true })).into_response()
 }
 
 async fn update_name_http(
@@ -364,10 +413,27 @@ async fn upload_file_http(
                     .unwrap_or_else(|| "unknown".to_string());
                 println!("[Web Server] 文件名: {}", file_name);
                 
-                // 生成文件 ID 和路径
+                // 检查是否自动接收
+                let auto_accept = crate::db::get_auto_accept(&state.pool).await.unwrap_or(false);
+                
+                // 生成文件 ID
                 let file_id = uuid::Uuid::new_v4().to_string();
-                let safe_filename = format!("{}_{}", file_id, file_name);
-                let path = download_dir.join(&safe_filename);
+                
+                // 根据自动接收设置决定保存路径
+                let path = if auto_accept {
+                    // 自动接收：直接保存到下载目录，使用原始文件名
+                    println!("[Web Server] 自动接收模式：保存到下载目录");
+                    download_dir.join(&file_name)
+                } else {
+                    // 手动接收：保存到系统临时目录，使用 UUID_filename 格式
+                    println!("[Web Server] 手动接收模式：保存到临时目录");
+                    let temp_dir = std::env::temp_dir().join("lanchat_temp");
+                    // 确保临时目录存在
+                    if let Err(e) = std::fs::create_dir_all(&temp_dir) {
+                        eprintln!("[Web Server] 创建临时目录失败: {}", e);
+                    }
+                    temp_dir.join(format!("{}_{}", file_id, file_name))
+                };
                 
                 println!("[Web Server] 保存文件到: {:?}", path);
                 
@@ -430,13 +496,28 @@ async fn upload_file_http(
         .unwrap()
         .as_secs() as i64;
     
-    // 从文件路径提取 file_id
+    // 从文件路径提取 file_id (UUID 部分)
     let file_id = file_path.file_stem()
         .and_then(|s| s.to_str())
         .and_then(|s| s.split('_').next())
         .unwrap_or("unknown")
         .to_string();
     
+    println!("[Web Server] ========== 文件接收完成 ==========");
+    println!("[Web Server] 文件 ID: {}", file_id);
+    println!("[Web Server] 文件名: {}", file_name);
+    println!("[Web Server] 文件大小: {} 字节", file_size);
+    println!("[Web Server] 文件路径: {:?}", file_path);
+    println!("[Web Server] 发送者 ID: {}", sender_id);
+    
+    // 检查是否自动接收
+    let auto_accept = crate::db::get_auto_accept(&state.pool).await.unwrap_or(false);
+    let file_status = if auto_accept { "accepted" } else { "pending" };
+    
+    println!("[Web Server] 自动接收设置: {}", auto_accept);
+    println!("[Web Server] 文件状态: {}", file_status);
+    
+    // 保存到数据库，使用 file_status 标记状态
     if let Err(e) = sqlx::query(
         "INSERT INTO messages (sender_id, content, msg_type, timestamp, file_path, file_status) VALUES (?, ?, 'file', ?, ?, ?)"
     )
@@ -444,17 +525,18 @@ async fn upload_file_http(
     .bind(&file_name)
     .bind(timestamp)
     .bind(file_path.to_str().unwrap())
-    .bind(file_size.to_string())
+    .bind(file_status)
     .execute(&state.pool)
     .await {
-        eprintln!("[Web Server] 保存数据库失败: {}", e);
+        eprintln!("[Web Server] ✗ 保存数据库失败: {}", e);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse { error: format!("保存记录失败: {}", e) }),
         ).into_response();
     }
     
-    println!("[Web Server] 文件保存成功: {} ({}字节)", file_id, file_size);
+    println!("[Web Server] ✓ 文件记录已保存到数据库");
+    println!("[Web Server] ==========================================");
     
     // 桌面端: 发送 Tauri 事件通知前端
     #[cfg(feature = "desktop")]
@@ -469,6 +551,7 @@ async fn upload_file_http(
             "file_id": file_id.clone(),
             "file_name": file_name.clone(),
             "file_size": file_size,
+            "file_status": file_status,
         }));
         println!("[Web Server] 已发送文件接收 Tauri 事件: new-message");
     }
@@ -478,6 +561,164 @@ async fn upload_file_http(
         "file_id": file_id,
         "file_name": file_name,
         "file_size": file_size,
+        "file_status": file_status,
+    })).into_response()
+}
+
+// 接受文件（手动接收模式）
+#[derive(Deserialize)]
+struct AcceptFileRequest {
+    save_path: Option<String>,
+}
+
+async fn accept_file_http(
+    State(state): State<Arc<AppState>>,
+    Path(file_id): Path<String>,
+    Json(payload): Json<AcceptFileRequest>,
+) -> impl IntoResponse {
+    println!("[Web Server] ========== 开始处理文件接收 ==========");
+    println!("[Web Server] 收到接受文件请求: file_id={}", file_id);
+    println!("[Web Server] save_path: {:?}", payload.save_path);
+    
+    // 先列出所有文件消息，方便调试
+    println!("[Web Server] 查询所有文件消息...");
+    if let Ok(rows) = sqlx::query("SELECT id, sender_id, content, file_path, file_status FROM messages WHERE msg_type = 'file' ORDER BY id DESC LIMIT 10")
+        .fetch_all(&state.pool)
+        .await {
+        use sqlx::Row;
+        for row in rows {
+            let id: i64 = row.get("id");
+            let sender: String = row.get("sender_id");
+            let content: String = row.get("content");
+            let path: String = row.get("file_path");
+            let status: String = row.get("file_status");
+            println!("[Web Server]   ID={}, sender={}, content={}, path={}, status={}", 
+                     id, sender, content, path, status);
+        }
+    }
+    
+    // 从数据库查询文件信息 - 使用 file_path LIKE 模糊匹配
+    let query_pattern = format!("%{}%", file_id);
+    println!("[Web Server] 查询模式: {}", query_pattern);
+    
+    let row = sqlx::query(
+        "SELECT file_path, content FROM messages WHERE file_path LIKE ? AND file_status = 'pending'"
+    )
+    .bind(&query_pattern)
+    .fetch_optional(&state.pool)
+    .await;
+    
+    let row = match row {
+        Ok(Some(r)) => {
+            println!("[Web Server] ✓ 找到匹配的 pending 文件记录");
+            r
+        },
+        Ok(None) => {
+            println!("[Web Server] ✗ 未找到匹配的 pending 文件");
+            println!("[Web Server] 可能原因:");
+            println!("[Web Server]   1. file_id 不匹配任何文件路径");
+            println!("[Web Server]   2. 文件状态不是 'pending'");
+            println!("[Web Server]   3. 文件已被接收或删除");
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse { error: format!("文件不存在或已接收 (file_id={})", file_id) }),
+            ).into_response();
+        }
+        Err(e) => {
+            println!("[Web Server] ✗ 数据库查询失败: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: format!("查询文件失败: {}", e) }),
+            ).into_response();
+        }
+    };
+    
+    use sqlx::Row;
+    let temp_path: String = row.get("file_path");
+    let file_name: String = row.get("content");
+    
+    println!("[Web Server] 临时路径: {}", temp_path);
+    println!("[Web Server] 文件名: {}", file_name);
+    
+    // 检查文件是否存在（可能还在上传中）
+    if !std::path::Path::new(&temp_path).exists() {
+        println!("[Web Server] ⏳ 文件还在下载中");
+        return (
+            StatusCode::ACCEPTED,  // 202 表示请求已接受但还在处理中
+            Json(serde_json::json!({
+                "downloading": true,
+                "message": "文件正在下载中，请稍候..."
+            })),
+        ).into_response();
+    }
+    
+    // 确定最终保存路径
+    let final_path = if let Some(path) = payload.save_path {
+        std::path::PathBuf::from(path).join(&file_name)
+    } else {
+        let download_path = crate::db::get_download_path(&state.pool).await
+            .unwrap_or_else(|_| std::env::temp_dir().join("lanchat_downloads").to_str().unwrap().to_string());
+        println!("[Web Server] 使用默认下载路径: {}", download_path);
+        std::path::PathBuf::from(download_path).join(&file_name)
+    };
+    
+    println!("[Web Server] 最终路径: {:?}", final_path);
+    
+    // 确保目标目录存在
+    if let Some(parent) = final_path.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            println!("[Web Server] ✗ 创建目录失败: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: format!("创建目录失败: {}", e) }),
+            ).into_response();
+        }
+    }
+    
+    // 移动文件 - 使用复制+删除来支持跨文件系统
+    println!("[Web Server] 开始移动文件...");
+    if let Err(e) = std::fs::rename(&temp_path, &final_path) {
+        // rename 失败（可能是跨文件系统），尝试复制+删除
+        println!("[Web Server] rename 失败 ({}), 尝试复制+删除", e);
+        
+        if let Err(e) = std::fs::copy(&temp_path, &final_path) {
+            println!("[Web Server] ✗ 复制文件失败: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: format!("复制文件失败: {}", e) }),
+            ).into_response();
+        }
+        
+        // 复制成功后删除临时文件
+        if let Err(e) = std::fs::remove_file(&temp_path) {
+            println!("[Web Server] ⚠ 删除临时文件失败: {}", e);
+            // 不返回错误，因为文件已经复制成功了
+        }
+        
+        println!("[Web Server] ✓ 文件已复制到目标位置");
+    } else {
+        println!("[Web Server] ✓ 文件已移动到目标位置");
+    }
+    
+    // 更新数据库状态
+    if let Err(e) = sqlx::query(
+        "UPDATE messages SET file_status = 'accepted', file_path = ? WHERE file_path = ?"
+    )
+    .bind(final_path.to_str().unwrap())
+    .bind(&temp_path)
+    .execute(&state.pool)
+    .await {
+        println!("[Web Server] ✗ 更新数据库失败: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: format!("更新数据库失败: {}", e) }),
+        ).into_response();
+    }
+    
+    println!("[Web Server] ✓ 文件已接受并保存到: {:?}", final_path);
+    Json(serde_json::json!({
+        "success": true,
+        "path": final_path.to_str().unwrap()
     })).into_response()
 }
 

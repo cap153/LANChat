@@ -15,10 +15,14 @@
     "log:default",
     "shell:default",
     "allow-get-my-name",
+    "allow-get-my-id",
     "allow-update-my-name",
     "allow-get-peers",
     "allow-send-message",
     "allow-get-chat-history",
-    "allow-send-file"
+    "allow-send-file",
+    "allow-get-settings",
+    "allow-update-settings",
+    "allow-accept-file"
   ]
 }

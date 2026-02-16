@@ -73,6 +73,74 @@ pub async fn update_username(pool: &sqlx::Pool<sqlx::Sqlite>, new_name: String) 
     Ok(())
 }
 
+// 获取下载路径
+pub async fn get_download_path(pool: &sqlx::Pool<sqlx::Sqlite>) -> Result<String, String> {
+    let res: Result<(String,), _> = sqlx::query_as("SELECT value FROM settings WHERE key = 'download_path'")
+        .fetch_one(pool)
+        .await;
+    
+    match res {
+        Ok((path,)) => Ok(path),
+        Err(_) => {
+            // 如果没有设置，返回默认路径
+            let default_path = std::env::temp_dir().join("lanchat_downloads");
+            Ok(default_path.to_str().unwrap().to_string())
+        }
+    }
+}
+
+// 更新下载路径
+pub async fn update_download_path(pool: &sqlx::Pool<sqlx::Sqlite>, new_path: String) -> Result<(), String> {
+    println!("[DB] 正在更新下载路径为: {}", new_path);
+    
+    // 验证路径不为空
+    if new_path.trim().is_empty() {
+        return Err("路径不能为空".to_string());
+    }
+    
+    // 尝试创建目录
+    if let Err(e) = std::fs::create_dir_all(&new_path) {
+        return Err(format!("无法创建目录: {}", e));
+    }
+    
+    sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('download_path', ?)")
+        .bind(new_path.trim())
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    println!("[DB] 下载路径更新成功");
+    Ok(())
+}
+
+// 获取是否自动接收
+pub async fn get_auto_accept(pool: &sqlx::Pool<sqlx::Sqlite>) -> Result<bool, String> {
+    let res: Result<(String,), _> = sqlx::query_as("SELECT value FROM settings WHERE key = 'auto_accept'")
+        .fetch_one(pool)
+        .await;
+    
+    match res {
+        Ok((value,)) => Ok(value == "true"),
+        Err(_) => Ok(false), // 默认不自动接收
+    }
+}
+
+// 更新是否自动接收
+pub async fn update_auto_accept(pool: &sqlx::Pool<sqlx::Sqlite>, auto_accept: bool) -> Result<(), String> {
+    println!("[DB] 正在更新自动接收设置为: {}", auto_accept);
+    
+    let value = if auto_accept { "true" } else { "false" };
+    
+    sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('auto_accept', ?)")
+        .bind(value)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    println!("[DB] 自动接收设置更新成功");
+    Ok(())
+}
+
 // 为 Tauri 桌面端初始化数据库
 #[cfg(feature = "desktop")]
 pub async fn init_db(app_handle: &AppHandle) -> Result<Pool<Sqlite>, sqlx::Error> {

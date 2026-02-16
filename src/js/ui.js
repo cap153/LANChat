@@ -1,5 +1,6 @@
 // UI 交互逻辑
 
+// 初始化改名功能
 function initNameEditor() {
     const editBtn = document.getElementById('edit-name-btn');
     const editPanel = document.getElementById('edit-name-panel');
@@ -9,12 +10,19 @@ function initNameEditor() {
     const errorMsg = document.getElementById('error-msg');
     const nameDisplay = document.getElementById('my-name');
 
-    // 点击编辑按钮
+    // 点击编辑按钮 - 切换显示/隐藏
     editBtn.addEventListener('click', () => {
-        editPanel.style.display = 'block';
-        nameInput.value = '';
-        nameInput.focus();
-        errorMsg.textContent = '';
+        if (editPanel.style.display === 'block') {
+            // 当前是显示状态，点击后隐藏
+            editPanel.style.display = 'none';
+            errorMsg.textContent = '';
+        } else {
+            // 当前是隐藏状态，点击后显示
+            editPanel.style.display = 'block';
+            nameInput.value = '';
+            nameInput.focus();
+            errorMsg.textContent = '';
+        }
     });
 
     // 点击取消按钮
@@ -308,24 +316,47 @@ function addMessageToChat(message, isSent) {
     // 检查是否是文件消息
     if (message.msg_type === 'file') {
         console.log('[UI] 渲染文件消息:', message.file_name || message.content);
+        console.log('[UI] 文件状态:', message.file_status);
+        
         const fileDiv = document.createElement('div');
         fileDiv.className = 'message-file';
+        
+        const fileStatus = message.file_status || 'accepted';
+        const isPending = fileStatus === 'pending';
+        const isAccepted = fileStatus === 'accepted';
+        const isDownloading = fileStatus === 'downloading';
+        
         fileDiv.innerHTML = `
             <div class="file-info">
                 <span class="file-icon">📄</span>
                 <div>
                     <div class="file-name">${message.file_name || message.content}</div>
                     <div class="file-size">${message.file_size ? formatFileSize(message.file_size) : '未知大小'}</div>
+                    ${isAccepted && !isSent ? '<div class="file-finish">finish</div>' : ''}
+                    ${isDownloading ? '<div class="file-downloading">下载中...</div>' : ''}
                 </div>
             </div>
         `;
         
-        // 如果是接收的文件,添加下载功能
+        // 如果是接收的文件
         if (!isSent && message.file_id) {
-            fileDiv.style.cursor = 'pointer';
-            fileDiv.addEventListener('click', () => {
-                downloadFile(message.file_id, message.file_name || message.content);
-            });
+            if (isPending) {
+                // 待接收状态 - 显示接收按钮
+                const acceptBtn = document.createElement('button');
+                acceptBtn.className = 'accept-file-btn';
+                acceptBtn.textContent = '接收';
+                acceptBtn.addEventListener('click', () => {
+                    acceptFile(message.file_id, message.file_name || message.content);
+                });
+                fileDiv.appendChild(acceptBtn);
+            } else if (isAccepted) {
+                // 已接收状态 - 可以下载
+                fileDiv.style.cursor = 'pointer';
+                fileDiv.addEventListener('click', () => {
+                    downloadFile(message.file_id, message.file_name || message.content);
+                });
+            }
+            // isDownloading 状态不添加任何交互
         }
         
         contentDiv.appendChild(fileDiv);
@@ -476,5 +507,300 @@ async function downloadFile(fileId, fileName) {
     } catch (e) {
         console.error('[UI] 下载文件失败:', e);
         alert('下载失败: ' + e.message);
+    }
+}
+
+
+// 初始化设置功能
+function initSettings() {
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsPanel = document.getElementById('settings-panel');
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
+    const cancelSettingsBtn = document.getElementById('cancel-settings-btn');
+    const choosePathBtn = document.getElementById('choose-path-btn');
+    const autoAcceptCheckbox = document.getElementById('auto-accept-checkbox');
+    const downloadPathInput = document.getElementById('download-path-input');
+    const settingsErrorMsg = document.getElementById('settings-error-msg');
+    const settingsSuccessMsg = document.getElementById('settings-success-msg');
+    
+    // 打开/关闭设置面板 - 切换显示/隐藏
+    settingsBtn.addEventListener('click', async () => {
+        if (settingsPanel.style.display === 'block') {
+            // 当前是显示状态，点击后隐藏
+            settingsPanel.style.display = 'none';
+            settingsErrorMsg.textContent = '';
+            settingsSuccessMsg.textContent = '';
+            settingsSuccessMsg.classList.remove('show');
+        } else {
+            // 当前是隐藏状态，点击后显示
+            try {
+                const settings = await apiGetSettings();
+                autoAcceptCheckbox.checked = settings.auto_accept;
+                downloadPathInput.value = settings.download_path;
+                settingsPanel.style.display = 'block';
+                settingsErrorMsg.textContent = '';
+                settingsSuccessMsg.textContent = '';
+                settingsSuccessMsg.classList.remove('show');
+            } catch (e) {
+                settingsErrorMsg.textContent = '加载设置失败: ' + e.message;
+                settingsPanel.style.display = 'block';
+            }
+        }
+    });
+    
+    // 选择路径
+    choosePathBtn.addEventListener('click', async () => {
+        const tauri = window.__TAURI__;
+        if (tauri) {
+            // 桌面端 - 使用 Tauri 对话框
+            try {
+                const selected = await tauri.dialog.open({
+                    directory: true,
+                    multiple: false,
+                    title: '选择下载文件夹'
+                });
+                
+                if (selected) {
+                    const path = Array.isArray(selected) ? selected[0] : selected;
+                    downloadPathInput.value = path;
+                }
+            } catch (e) {
+                settingsErrorMsg.textContent = '选择路径失败: ' + e.message;
+            }
+        } else {
+            // Web 端 - 只能手动输入
+            const newPath = prompt('请输入下载路径:', downloadPathInput.value);
+            if (newPath) {
+                downloadPathInput.value = newPath;
+            }
+        }
+    });
+    
+    // 保存设置
+    saveSettingsBtn.addEventListener('click', async () => {
+        try {
+            settingsErrorMsg.textContent = '';
+            settingsSuccessMsg.textContent = '';
+            settingsSuccessMsg.classList.remove('show');
+            
+            await apiUpdateSettings(
+                downloadPathInput.value,
+                autoAcceptCheckbox.checked
+            );
+            
+            // 显示成功消息
+            settingsSuccessMsg.textContent = '✓ 设置保存成功';
+            settingsSuccessMsg.classList.add('show');
+            
+            // 1.5秒后自动关闭设置面板
+            setTimeout(() => {
+                settingsPanel.style.display = 'none';
+                settingsSuccessMsg.classList.remove('show');
+            }, 1500);
+            
+            console.log('[UI] 设置保存成功');
+        } catch (e) {
+            settingsErrorMsg.textContent = '保存失败: ' + e.message;
+        }
+    });
+    
+    // 取消
+    cancelSettingsBtn.addEventListener('click', () => {
+        settingsPanel.style.display = 'none';
+        settingsErrorMsg.textContent = '';
+        settingsSuccessMsg.textContent = '';
+        settingsSuccessMsg.classList.remove('show');
+    });
+}
+
+
+// 接受文件
+async function acceptFile(fileId, fileName) {
+    console.log('[UI] ========== 开始接受文件 ==========');
+    console.log('[UI] file_id:', fileId);
+    console.log('[UI] file_name:', fileName);
+    
+    const tauri = window.__TAURI__;
+    
+    // 创建取消标志
+    const cancelFlag = { cancelled: false };
+    
+    try {
+        let savePath = null;
+        
+        if (tauri) {
+            // 桌面端 - 弹出对话框选择保存位置
+            console.log('[UI] 桌面端模式');
+            const selected = await tauri.dialog.open({
+                directory: true,
+                multiple: false,
+                title: '选择保存位置'
+            });
+            
+            if (!selected) {
+                console.log('[UI] 用户取消了选择');
+                return;
+            }
+            
+            savePath = Array.isArray(selected) ? selected[0] : selected;
+            console.log('[UI] 选择的保存路径:', savePath);
+            
+            // 桌面端：调用 Tauri 命令，带重试逻辑
+            await acceptFileWithRetry(tauri, fileId, savePath, fileName, cancelFlag);
+        } else {
+            // Web 端 - 直接使用默认路径
+            console.log('[UI] Web 端模式，使用默认路径');
+            console.log('[UI] 请求 URL:', `/api/accept_file/${fileId}`);
+            
+            // Web 端：调用 HTTP API，带重试逻辑
+            await acceptFileHttpWithRetry(fileId, fileName, cancelFlag);
+        }
+        
+        console.log('[UI] ==========================================');
+    } catch (e) {
+        if (e.message === 'USER_CANCELLED') {
+            console.log('[UI] 用户取消了接收');
+            return;
+        }
+        console.error('[UI] ✗ 接受文件失败:', e);
+        console.error('[UI] 错误详情:', e.message);
+        console.error('[UI] 错误堆栈:', e.stack);
+        alert('接受文件失败: ' + e.message);
+    }
+}
+
+// 桌面端接受文件（带重试和取消）
+async function acceptFileWithRetry(tauri, fileId, savePath, fileName, cancelFlag) {
+    let retryCount = 0;
+    
+    while (!cancelFlag.cancelled) {
+        try {
+            await tauri.core.invoke('accept_file', {
+                fileId,
+                savePath
+            });
+            
+            console.log('[UI] ✓ 文件接收成功');
+            
+            // 刷新聊天历史
+            if (window.currentChatPeer) {
+                console.log('[UI] 刷新聊天历史...');
+                await loadChatHistory(window.currentChatPeer.id);
+                console.log('[UI] 聊天历史已刷新');
+            }
+            
+            return; // 成功，退出
+        } catch (e) {
+            if (e.includes('还在下载中') || e.includes('下载中')) {
+                retryCount++;
+                console.log(`[UI] 文件下载中，等待... (第 ${retryCount} 次重试)`);
+                
+                // 第一次显示下载中状态
+                if (retryCount === 1 && window.currentChatPeer) {
+                    await loadChatHistory(window.currentChatPeer.id);
+                    // 显示取消按钮
+                    showCancelButton(fileId, cancelFlag);
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 2000)); // 等待2秒
+                continue;
+            }
+            throw e; // 其他错误，直接抛出
+        }
+    }
+    
+    throw new Error('USER_CANCELLED');
+}
+
+// Web 端接受文件（带重试和取消）
+async function acceptFileHttpWithRetry(fileId, fileName, cancelFlag) {
+    let retryCount = 0;
+    
+    while (!cancelFlag.cancelled) {
+        const resp = await fetch(`/api/accept_file/${fileId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ save_path: null })
+        });
+        
+        console.log('[UI] API 响应状态:', resp.status, resp.statusText);
+        
+        if (resp.status === 202) {
+            // 202 表示文件还在下载中
+            retryCount++;
+            console.log(`[UI] 文件下载中，等待... (第 ${retryCount} 次重试)`);
+            
+            // 第一次显示下载中状态
+            if (retryCount === 1 && window.currentChatPeer) {
+                await loadChatHistory(window.currentChatPeer.id);
+                // 显示取消按钮
+                showCancelButton(fileId, cancelFlag);
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 等待2秒
+            continue;
+        }
+        
+        if (!resp.ok) {
+            const errorText = await resp.text();
+            console.error('[UI] ✗ API 错误响应:', errorText);
+            throw new Error('接受文件失败: HTTP ' + resp.status + ' - ' + errorText);
+        }
+        
+        const result = await resp.json();
+        console.log('[UI] ✓ API 响应成功:', result);
+        
+        // 隐藏取消按钮
+        hideCancelButton(fileId);
+        
+        // 刷新聊天历史
+        if (window.currentChatPeer) {
+            console.log('[UI] 刷新聊天历史...');
+            await loadChatHistory(window.currentChatPeer.id);
+            console.log('[UI] 聊天历史已刷新');
+        }
+        
+        return; // 成功，退出
+    }
+    
+    throw new Error('USER_CANCELLED');
+}
+
+// 显示取消按钮
+function showCancelButton(fileId, cancelFlag) {
+    const chatMessages = document.getElementById('chat-messages');
+    const messages = chatMessages.querySelectorAll('.message');
+    
+    for (const messageDiv of messages) {
+        const fileDiv = messageDiv.querySelector('.message-file');
+        if (!fileDiv) continue;
+        
+        // 检查是否是当前文件（通过文件名或其他标识）
+        const downloadingDiv = fileDiv.querySelector('.file-downloading');
+        if (downloadingDiv) {
+            // 检查是否已经有取消按钮
+            if (!fileDiv.querySelector('.cancel-download-btn')) {
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'cancel-download-btn';
+                cancelBtn.textContent = '取消';
+                cancelBtn.dataset.fileId = fileId;
+                cancelBtn.addEventListener('click', () => {
+                    cancelFlag.cancelled = true;
+                    hideCancelButton(fileId);
+                    console.log('[UI] 用户取消了下载');
+                });
+                fileDiv.appendChild(cancelBtn);
+            }
+        }
+    }
+}
+
+// 隐藏取消按钮
+function hideCancelButton(fileId) {
+    const cancelBtns = document.querySelectorAll('.cancel-download-btn');
+    for (const btn of cancelBtns) {
+        if (btn.dataset.fileId === fileId) {
+            btn.remove();
+        }
     }
 }
