@@ -155,11 +155,15 @@ async function apiUpdateMyName(newName) {
 
 // 导出监听函数，同样要做环境判断
 async function apiListen(eventName, callback) {
+    console.log("[JS-API] 尝试监听事件:", eventName);
     const tauri = getTauri();
     if (tauri) {
-        return await tauri.event.listen(eventName, callback);
+        console.log("[JS-API] ✓ Tauri 环境，注册事件监听器:", eventName);
+        const unlisten = await tauri.event.listen(eventName, callback);
+        console.log("[JS-API] ✓ 事件监听器注册成功:", eventName);
+        return unlisten;
     } else {
-        console.warn(`[JS-API] 当前环境不支持监听事件: ${eventName}`);
+        console.warn(`[JS-API] ✗ 当前环境不支持监听事件: ${eventName}`);
         return () => {}; // 返回空函数
     }
 }

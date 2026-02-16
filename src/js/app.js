@@ -25,8 +25,12 @@ async function renderPage() {
 
     // 监听新消息事件(桌面端)
     await apiListen('new-message', (event) => {
-        console.log("[JS-App] 收到新消息事件");
-        console.log("[JS-App] 事件内容:", JSON.stringify(event.payload, null, 2));
+        console.log("[JS-App] ========== 收到 new-message 事件 ==========");
+        console.log("[JS-App] 事件类型:", typeof event);
+        console.log("[JS-App] 事件对象:", event);
+        console.log("[JS-App] payload 类型:", typeof event.payload);
+        console.log("[JS-App] payload 内容:", JSON.stringify(event.payload, null, 2));
+        console.log("[JS-App] ==========================================");
         onReceiveMessage(event.payload);
     });
 
@@ -34,12 +38,10 @@ async function renderPage() {
     console.log("[JS-App] 启动用户列表轮询");
     startPeerPolling();
 
-    // Web 端启动消息轮询
+    // 启动消息轮询（桌面端和 Web 端都需要，用于检测状态变化）
     const tauri = window.__TAURI__;
-    if (!tauri) {
-        console.log("[JS-App] Web 端模式，启动消息轮询");
-        startMessagePolling();
-    }
+    console.log("[JS-App] 启动消息轮询");
+    startMessagePolling();
 }
 
 // Web 端轮询用户列表
@@ -92,13 +94,33 @@ async function startMessagePolling() {
         try {
             const messages = await apiGetChatHistory(window.currentChatPeer.id);
             
-            // 找出新消息(时间戳大于最后记录的)
-            for (const msg of messages) {
-                if (msg.timestamp > (window.lastMessageTimestamp || 0) && msg.from_id !== 'me') {
-                    // 显示新消息(包括文本和文件)
-                    addMessageToChat(msg, false);
-                    window.lastMessageTimestamp = msg.timestamp;
+            // 检查是否有新消息或状态变化
+            let hasChanges = false;
+            
+            // 检查消息数量是否变化
+            const chatMessages = document.getElementById('chat-messages');
+            const currentMessageCount = chatMessages.querySelectorAll('.message').length;
+            
+            if (messages.length !== currentMessageCount) {
+                hasChanges = true;
+            } else {
+                // 检查是否有文件状态变化（downloading -> pending/accepted）
+                for (const msg of messages) {
+                    if (msg.msg_type === 'file' && msg.file_status !== 'downloading') {
+                        // 检查当前显示的消息是否还是 downloading 状态
+                        const fileMessages = chatMessages.querySelectorAll('.file-downloading');
+                        if (fileMessages.length > 0) {
+                            hasChanges = true;
+                            break;
+                        }
+                    }
                 }
+            }
+            
+            // 如果有变化，刷新整个聊天历史
+            if (hasChanges) {
+                console.log('[JS-App] 检测到消息变化，刷新聊天历史');
+                await loadChatHistory(window.currentChatPeer.id);
             }
         } catch (e) {
             console.error('[JS-App] 轮询消息失败:', e);

@@ -531,6 +531,15 @@ h2 {
     animation: pulse 1.5s ease-in-out infinite;
 }
 
+/* 文件上传中状态 */
+.file-uploading {
+    color: #ff9800;
+    font-size: 12px;
+    margin-top: 4px;
+    font-weight: 500;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
 @keyframes pulse {
     0%, 100% {
         opacity: 1;

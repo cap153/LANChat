@@ -325,6 +325,7 @@ function addMessageToChat(message, isSent) {
         const isPending = fileStatus === 'pending';
         const isAccepted = fileStatus === 'accepted';
         const isDownloading = fileStatus === 'downloading';
+        const isUploading = fileStatus === 'uploading';
         
         fileDiv.innerHTML = `
             <div class="file-info">
@@ -334,6 +335,7 @@ function addMessageToChat(message, isSent) {
                     <div class="file-size">${message.file_size ? formatFileSize(message.file_size) : '未知大小'}</div>
                     ${isAccepted && !isSent ? '<div class="file-finish">finish</div>' : ''}
                     ${isDownloading ? '<div class="file-downloading">下载中...</div>' : ''}
+                    ${isUploading ? '<div class="file-uploading">上传中...</div>' : ''}
                 </div>
             </div>
         `;
@@ -356,7 +358,7 @@ function addMessageToChat(message, isSent) {
                     downloadFile(message.file_id, message.file_name || message.content);
                 });
             }
-            // isDownloading 状态不添加任何交互
+            // isDownloading 和 isUploading 状态不添加任何交互
         }
         
         contentDiv.appendChild(fileDiv);
@@ -405,16 +407,31 @@ async function loadChatHistory(peerId) {
 
 // 接收到新消息
 function onReceiveMessage(message) {
-    console.log('[UI] 收到新消息:', message);
+    console.log('[UI] ========== onReceiveMessage 被调用 ==========');
+    console.log('[UI] 消息内容:', JSON.stringify(message, null, 2));
     console.log('[UI] 当前聊天对象:', window.currentChatPeer);
     
-    // 如果正在和发送者聊天,显示消息
+    // 如果正在和发送者聊天
     if (window.currentChatPeer && window.currentChatPeer.id === message.from_id) {
-        console.log('[UI] 匹配当前聊天对象，显示消息');
-        addMessageToChat(message, false);
+        console.log('[UI] ✓ 匹配当前聊天对象');
+        
+        // 检查是否是文件状态更新（downloading -> accepted/pending）
+        if (message.msg_type === 'file' && message.file_status !== 'downloading') {
+            // 刷新聊天历史以更新状态
+            console.log('[UI] 文件状态更新 (' + message.file_status + ')，刷新聊天历史');
+            loadChatHistory(window.currentChatPeer.id);
+        } else {
+            // 直接显示新消息
+            console.log('[UI] 直接显示新消息 (msg_type=' + message.msg_type + ', file_status=' + message.file_status + ')');
+            addMessageToChat(message, false);
+        }
     } else {
-        console.log('[UI] 不匹配当前聊天对象，消息未显示');
+        console.log('[UI] ✗ 不匹配当前聊天对象');
+        console.log('[UI]   - message.from_id:', message.from_id);
+        console.log('[UI]   - currentChatPeer.id:', window.currentChatPeer ? window.currentChatPeer.id : 'null');
     }
+    
+    console.log('[UI] ==========================================');
     
     // TODO: 显示未读消息提示
 }
@@ -431,56 +448,129 @@ async function sendFile(file) {
         console.log('[UI] 桌面端发送文件');
         
         try {
+            // 先显示上传中的临时消息
+            const tempFileId = 'temp_' + Date.now();
+            addMessageToChat({
+                msg_type: 'file',
+                from_id: 'me',
+                content: '准备发送...',
+                file_name: '准备发送...',
+                file_size: 0,
+                file_id: tempFileId,
+                file_status: 'uploading',
+                timestamp: Date.now() / 1000
+            }, true);
+            
             const result = await apiSendFile(
                 window.currentChatPeer.addr,
                 null  // 桌面端不需要
             );
             
-            // 从结果中获取文件信息
-            const fileName = result.file_name || '未知文件';
-            const fileSize = result.file_size || 0;
-            
-            // 显示发送的文件消息
-            addMessageToChat({
-                msg_type: 'file',
-                from_id: 'me',
-                content: fileName,
-                file_name: fileName,
-                file_size: fileSize,
-                file_id: result.file_id,
-                timestamp: Date.now() / 1000
-            }, true);
+            // 上传完成，刷新聊天历史以显示正确的文件信息
+            if (window.currentChatPeer) {
+                await loadChatHistory(window.currentChatPeer.id);
+            }
             
             console.log('[UI] 文件发送成功');
         } catch (e) {
             console.error('[UI] 文件发送失败:', e);
             alert('文件发送失败: ' + e.message);
+            // 刷新聊天历史以移除失败的消息
+            if (window.currentChatPeer) {
+                await loadChatHistory(window.currentChatPeer.id);
+            }
         }
     } else {
         // Web 端 - 使用传入的 file 参数
-        console.log('[UI] Web 端发送文件:', file.name, file.size);
+        console.log('[UI] ========== Web 端发送文件 ==========');
+        console.log('[UI] 文件名:', file.name);
+        console.log('[UI] 文件大小:', file.size);
+        console.log('[UI] 目标地址:', window.currentChatPeer.addr);
+        
+        // 立即显示发送中的消息
+        const tempFileId = 'temp_' + Date.now();
+        const timestamp = Math.floor(Date.now() / 1000);
+        
+        console.log('[UI] 1. 在前端显示上传中消息');
+        addMessageToChat({
+            msg_type: 'file',
+            from_id: 'me',
+            content: file.name,
+            file_name: file.name,
+            file_size: file.size,
+            file_id: tempFileId,
+            file_status: 'uploading',  // 上传中状态
+            timestamp: timestamp
+        }, true);
         
         try {
+            // 先在本地数据库创建上传记录
+            console.log('[UI] 2. 调用 /api/create_upload_record');
+            const createResp = await fetch('/api/create_upload_record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    file_name: file.name,
+                    timestamp: timestamp
+                })
+            });
+            
+            if (!createResp.ok) {
+                throw new Error('创建上传记录失败: ' + createResp.status);
+            }
+            
+            console.log('[UI] ✓ 上传记录已创建');
+            
+            console.log('[UI] 3. 开始上传文件到对方');
             const result = await apiSendFile(
                 window.currentChatPeer.addr,
                 file
             );
             
-            // 显示发送的文件消息
-            addMessageToChat({
-                msg_type: 'file',
-                from_id: 'me',
-                content: file.name,
-                file_name: file.name,
-                file_size: file.size,
-                file_id: result.file_id,
-                timestamp: Date.now() / 1000
-            }, true);
+            console.log('[UI] ✓ 文件上传成功');
             
-            console.log('[UI] 文件发送成功');
+            // 上传成功，更新本地数据库状态为 'sent'
+            console.log('[UI] 4. 更新上传状态为 sent');
+            const updateResp = await fetch('/api/update_upload_status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    file_name: file.name,
+                    timestamp: timestamp,
+                    status: 'sent'
+                })
+            });
+            
+            if (!updateResp.ok) {
+                console.warn('[UI] ⚠ 更新上传状态失败:', updateResp.status);
+            } else {
+                console.log('[UI] ✓ 上传状态已更新');
+            }
+            
+            // 刷新聊天历史以显示正确的状态
+            console.log('[UI] 5. 刷新聊天历史');
+            if (window.currentChatPeer) {
+                await loadChatHistory(window.currentChatPeer.id);
+            }
+            
+            console.log('[UI] ========== 文件发送完成 ==========');
         } catch (e) {
-            console.error('[UI] 文件发送失败:', e);
+            console.error('[UI] ✗ 文件发送失败:', e);
             alert('文件发送失败: ' + e.message);
+            // 删除失败的上传记录
+            console.log('[UI] 删除失败的上传记录');
+            await fetch('/api/delete_upload_record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    file_name: file.name,
+                    timestamp: timestamp
+                })
+            });
+            // 刷新聊天历史以移除失败的消息
+            if (window.currentChatPeer) {
+                await loadChatHistory(window.currentChatPeer.id);
+            }
         }
     }
 }

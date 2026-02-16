@@ -131,24 +131,66 @@ pub async fn send_file(
 ) -> Result<serde_json::Value, String> {
     println!("[Command] 收到发送文件请求: {} -> {}", file_path, peer_addr);
     
-    // 读取文件
-    let file_data = tokio::fs::read(&file_path)
-        .await
-        .map_err(|e| format!("读取文件失败: {}", e))?;
-    
-    // 获取文件名
+    // 获取文件名和大小
     let file_name = std::path::Path::new(&file_path)
         .file_name()
         .and_then(|n| n.to_str())
         .ok_or("无效的文件名")?
         .to_string();
     
-    let file_size = file_data.len();
+    let file_metadata = std::fs::metadata(&file_path)
+        .map_err(|e| format!("读取文件信息失败: {}", e))?;
+    let file_size = file_metadata.len() as usize;
+    
     println!("[Command] 文件: {}, 大小: {} 字节", file_name, file_size);
+    
+    // 立即创建数据库记录（状态为 uploading）
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    
+    let result = sqlx::query(
+        "INSERT INTO messages (sender_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, 'file', ?, ?, 'uploading')"
+    )
+    .bind(&file_name)
+    .bind(timestamp)
+    .bind(&file_path)
+    .execute(&state.pool)
+    .await;
+    
+    let message_id = match result {
+        Ok(res) => {
+            let id = res.last_insert_rowid();
+            println!("[Command] ✓ 已创建上传中记录，ID: {}", id);
+            Some(id)
+        }
+        Err(e) => {
+            eprintln!("[Command] ✗ 创建上传记录失败: {}", e);
+            None
+        }
+    };
+    
+    // 读取文件
+    let file_data = tokio::fs::read(&file_path)
+        .await
+        .map_err(|e| {
+            // 删除失败的数据库记录
+            if let Some(id) = message_id {
+                let pool = state.pool.clone();
+                tokio::spawn(async move {
+                    let _ = sqlx::query("DELETE FROM messages WHERE id = ?")
+                        .bind(id)
+                        .execute(&pool)
+                        .await;
+                });
+            }
+            format!("读取文件失败: {}", e)
+        })?;
     
     // 构造 multipart 请求
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(300))  // 增加超时时间到 5 分钟
         .build()
         .map_err(|e| format!("创建客户端失败: {}", e))?;
     
@@ -175,7 +217,19 @@ pub async fn send_file(
         .multipart(form)
         .send()
         .await
-        .map_err(|e| format!("上传失败: {}", e))?;
+        .map_err(|e| {
+            // 删除失败的数据库记录
+            if let Some(id) = message_id {
+                let pool = state.pool.clone();
+                tokio::spawn(async move {
+                    let _ = sqlx::query("DELETE FROM messages WHERE id = ?")
+                        .bind(id)
+                        .execute(&pool)
+                        .await;
+                });
+            }
+            format!("上传失败: {}", e)
+        })?;
     
     let status = response.status();
     println!("[Command] 响应状态: {}", status);
@@ -183,6 +237,15 @@ pub async fn send_file(
     if !status.is_success() {
         let error_text = response.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
         eprintln!("[Command] 错误响应: {}", error_text);
+        
+        // 删除失败的数据库记录
+        if let Some(id) = message_id {
+            let _ = sqlx::query("DELETE FROM messages WHERE id = ?")
+                .bind(id)
+                .execute(&state.pool)
+                .await;
+        }
+        
         return Err(format!("上传失败: HTTP {} - {}", status, error_text));
     }
     
@@ -191,22 +254,19 @@ pub async fn send_file(
         .await
         .map_err(|e| format!("解析响应失败: {}", e))?;
     
-    // 保存发送记录到数据库
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
-    
-    // 发送的文件状态标记为 "sent"
-    sqlx::query(
-        "INSERT INTO messages (sender_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, 'file', ?, ?, 'sent')"
-    )
-    .bind(&file_name)
-    .bind(timestamp)
-    .bind(&file_path)
-    .execute(&state.pool)
-    .await
-    .map_err(|e| format!("保存记录失败: {}", e))?;
+    // 更新数据库状态为 "sent"
+    if let Some(id) = message_id {
+        if let Err(e) = sqlx::query(
+            "UPDATE messages SET file_status = 'sent' WHERE id = ?"
+        )
+        .bind(id)
+        .execute(&state.pool)
+        .await {
+            eprintln!("[Command] ⚠ 更新数据库状态失败: {}", e);
+        } else {
+            println!("[Command] ✓ 文件状态已更新为 sent");
+        }
+    }
     
     println!("[Command] 文件上传成功");
     
