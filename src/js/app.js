@@ -5,7 +5,7 @@ async function renderPage() {
     const myName = await apiGetMyName();
     const nameElement = document.getElementById('my-name');
     if (nameElement) {
-        nameElement.innerText = "我是：" + myName;
+        nameElement.innerText = myName;
     }
 
     // 初始化改名功能
