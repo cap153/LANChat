@@ -231,7 +231,8 @@ function openChat(peer) {
     const chatMessages = document.getElementById('chat-messages');
     
     chatContainer.style.display = 'flex';
-    chatWithName.textContent = `与 ${peer.name} 聊天`;
+    // chatWithName.textContent = `与 ${peer.name} 聊天`;
+    chatWithName.textContent = `${peer.name}`;
     chatMessages.innerHTML = '';
     
     // 高亮选中的用户
