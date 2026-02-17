@@ -247,6 +247,43 @@ h2::before {
     color: rgba(189, 147, 249, 0.7); /* IP也带点紫 */
 }
 
+/* --- 离线状态高级样式 --- */
+
+/* 当 li 拥有 offline 类时，整行变暗并灰度化 */
+#user-list li.offline {
+    opacity: 0.55;
+    filter: grayscale(0.6);
+    cursor: default;
+    border-color: rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.1); /* 稍微深一点，显得没活力 */
+}
+
+/* 离线标签样式 */
+.user-status {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+/* 当处于离线状态时，激活标签外观 */
+.offline .user-status {
+    background: rgba(98, 114, 164, 0.2); /* 使用 Dracula Comment 颜色 */
+    color: #6272a4;                      /* 典型的蓝灰色 */
+    border: 1px solid rgba(98, 114, 164, 0.3);
+    box-shadow: inset 0 0 4px rgba(0,0,0,0.2);
+}
+
+/* 适配：确保名字和状态标签在一行 */
+.user-info-wrapper {
+    display: flex;
+    align-items: center;
+}
+
 /* --- 聊天主窗口 --- */
 .chat-container {
     flex: 1;
@@ -687,6 +724,11 @@ h2::before {
     .container {
         height: 100vh;
         overflow: hidden;
+    /* 针对移动端浏览器地址栏变化的动态高度 */
+    height: 100dvh; 
+    /* [新增] 关键修复：顶部增加内边距，避开手机状态栏 */
+    padding-top: env(safe-area-inset-top); 
+    box-sizing: border-box; /* 确保 padding 不会撑大整体宽度 */
     }
 
     /* 1. 让主内容区铺满 */
@@ -714,6 +756,12 @@ h2::before {
     #user-list li {
         margin: 8px 15px; /* 左右留一点边距 */
         width: auto; /* 自动填满 */
+        flex-wrap: wrap; /* 如果空间不够允许换行 */
+    }
+
+    .user-addr {
+        font-size: 11px;
+        opacity: 0.4;
     }
 
     /* 4. 聊天窗口：全屏覆盖模式 */
@@ -721,16 +769,39 @@ h2::before {
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
         z-index: 50;
-        display: none; /* 默认隐藏 */
+        display: none;
         width: 100%;
-        height: 100%;
+        
+        /* 1. 高度使用 100dvh 解决浏览器地址栏伸缩问题 */
+        height: 100dvh; 
+        /* 2. 顶部增加内边距，把内容(Header)挤下来，露出状态栏 */
+        padding-top: env(safe-area-inset-top);
+        /* 3. 必须加上这个，否则 padding 会导致高度溢出出现滚动条 */
+        box-sizing: border-box; 
     }
     
     /* 移动端输入区域调整 */
-    .chat-input-container { padding: 10px 15px; }
-    #attach-file-btn { width: 36px; height: 36px; font-size: 18px; }
-    #chat-input { padding: 10px 12px; font-size: 14px; }
-    #send-btn { padding: 8px 16px; font-size: 14px; }
+    .chat-input-container {
+        padding: 10px; /* 减小内边距 */
+        gap: 8px;      /* 减小间距 */
+        
+        /* [新增] 避开底部手势条（小黑条） */
+        padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    }
+    #attach-file-btn {
+        flex-shrink: 0; /* 禁止被压缩 */
+    }
+    #chat-input {
+        flex: 1;         /* 占满剩余空间 */
+        min-width: 0;    /* 关键：防止 flex 子项溢出 */
+        padding: 10px;
+    }
+    #send-btn {
+        flex-shrink: 0;  /* 关键：禁止按钮被挤压 */
+        width: auto;     /* 宽度自适应内容 */
+        padding: 8px 16px; 
+        white-space: nowrap; /* 防止文字换行 */
+    }
 }
 
 /* 主题选择面板 */

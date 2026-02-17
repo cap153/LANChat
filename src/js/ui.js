@@ -122,26 +122,23 @@ function addUserToList(id, name, addr, isOffline = false) {
 }
 
 // 更新用户状态
+// 更新用户状态 - 赛博神医微创版
 function updateUserStatus(item, name, addr, isOffline) {
     const statusSpan = item.querySelector('.user-status');
     const nameSpan = item.querySelector('.user-name');
     const addrSpan = item.querySelector('.user-addr');
     
-    // 更新名字（可能改名了）
-    if (nameSpan) {
-        nameSpan.textContent = name;
-    }
+    // 1. 更新基础信息
+    if (nameSpan) nameSpan.textContent = name;
+    if (addrSpan) addrSpan.textContent = addr;
     
-    // 更新地址（可能 IP 变了）
-    if (addrSpan) {
-        addrSpan.textContent = addr;
-    }
-    
-    // 更新离线状态
+    // 2. 更新状态标签的文字
     if (statusSpan) {
-        statusSpan.textContent = isOffline ? 'offline' : '';
+        // 离线显示 OFFLINE，在线清空
+        statusSpan.textContent = isOffline ? 'OFF' : '';
     }
     
+    // 3. 类名手术：使用你的原有逻辑，但确保 CSS 能跟上
     if (isOffline) {
         if (!item.classList.contains('offline')) {
             console.log('[UI] 用户离线:', name);
@@ -222,6 +219,8 @@ function initChat() {
     });
 }
 
+// --- 核心手术：修改原有的两个函数 ---
+
 // 打开聊天窗口
 function openChat(peer) {
     window.currentChatPeer = peer;
@@ -231,7 +230,6 @@ function openChat(peer) {
     const chatMessages = document.getElementById('chat-messages');
     
     chatContainer.style.display = 'flex';
-    // chatWithName.textContent = `与 ${peer.name} 聊天`;
     chatWithName.textContent = `${peer.name}`;
     chatMessages.innerHTML = '';
     
@@ -245,11 +243,16 @@ function openChat(peer) {
             item.classList.remove('active');
         }
     });
+
+    // [新增手术点 1]：如果是移动端，推入一条历史记录，用来拦截物理返回键
+    if (window.innerWidth <= 768) {
+        // 防止重复 push
+        if (window.location.hash !== '#chat') {
+            window.history.pushState({ chatOpen: true }, "", "#chat");
+        }
+    }
     
-    // 重置最后消息时间戳
     window.lastMessageTimestamp = 0;
-    
-    // 加载历史消息
     loadChatHistory(peer.id);
     
     console.log('[UI] 打开与', peer.name, '的聊天窗口');
@@ -257,6 +260,19 @@ function openChat(peer) {
 
 // 关闭聊天窗口
 function closeChat() {
+    // [新增手术点 2]：如果是点击 UI 上的关闭按钮，且当前在聊天状态（有 #chat 标记）
+    // 我们手动触发一次历史后退，让底下的 popstate 监听器去执行真正的 UI 关闭逻辑
+    if (window.innerWidth <= 768 && window.location.hash === '#chat') {
+        window.history.back();
+        return; // 交给下面的 popstate 处理，这里直接退出
+    }
+
+    // 真正的 UI 隐藏逻辑提取到这里（兼容桌面端直接调用）
+    performCloseChatUI();
+}
+
+// [新增手术点 3]：提取纯粹的 UI 关闭逻辑，供内部调用
+function performCloseChatUI() {
     window.currentChatPeer = null;
     
     const chatContainer = document.getElementById('chat-container');
@@ -267,8 +283,21 @@ function closeChat() {
     const items = userList.querySelectorAll('li');
     items.forEach(item => item.classList.remove('active'));
     
-    console.log('[UI] 关闭聊天窗口');
+    console.log('[UI] 聊天窗口已关闭 (UI 层)');
 }
+
+// --- 核心手术：添加全局返回键监听器 (粘贴在 JS 文件末尾即可) ---
+
+window.addEventListener('popstate', function (event) {
+    // 当监听到后退动作（比如 Android 物理返回键）
+    // 如果聊天窗口当前是打开状态，则执行隐藏
+    if (window.innerWidth <= 768) {
+        const chatContainer = document.getElementById('chat-container');
+        if (chatContainer && chatContainer.style.display !== 'none') {
+            performCloseChatUI();
+        }
+    }
+});
 
 // 发送消息
 async function sendMessage() {
