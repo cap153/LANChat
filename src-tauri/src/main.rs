@@ -27,7 +27,8 @@ fn main() {
             lanchat::commands::save_current_theme,
             lanchat::commands::get_current_theme,
             lanchat::commands::get_default_download_path,
-            lanchat::commands::request_storage_permission
+            lanchat::commands::request_storage_permission,
+            lanchat::commands::save_file_message
         ])
         // --------------------------
         .setup(|app| {

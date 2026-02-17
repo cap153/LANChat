@@ -36,7 +36,8 @@ pub fn run() {
             commands::save_current_theme,
             commands::get_current_theme,
             commands::get_default_download_path,
-            commands::request_storage_permission
+            commands::request_storage_permission,
+            commands::save_file_message
         ])
         .setup(|app| {
             let handle = app.handle().clone();

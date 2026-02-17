@@ -309,9 +309,9 @@ async function apiSendFile(peerId, peerAddr, file) {
     const tauri = getTauri();
     
     if (tauri) {
-        // 桌面端 - 使用 Tauri 对话框选择文件
+        // 桌面端/移动端 - 使用 Tauri 对话框选择文件
         try {
-            console.log("[JS-API] 桌面端发送文件");
+            console.log("[JS-API] Tauri 环境发送文件");
             
             // 使用 Tauri 的文件对话框
             const selected = await tauri.dialog.open({
@@ -325,20 +325,136 @@ async function apiSendFile(peerId, peerAddr, file) {
             
             const filePath = Array.isArray(selected) ? selected[0] : selected;
             console.log("[JS-API] 选择的文件:", filePath);
-            console.log("[JS-API] 发送到:", peerAddr, "ID:", peerId);
             
-            // 调用 Tauri 命令发送文件
-            const result = await tauri.core.invoke('send_file', {
-                peerId,
-                peerAddr,
-                filePath
+            // 检测是否是 content URI (Android)
+            const isContentUri = filePath.startsWith('content://');
+            console.log("[JS-API] 文件类型:", isContentUri ? "Android content URI" : "普通路径");
+            
+            let fileData, fileName, fileSize;
+            
+            if (isContentUri) {
+                // Android content URI - 使用 Tauri fs 插件读取
+                console.log("[JS-API] 使用 Tauri fs 插件读取 Android 文件");
+                
+                // 使用 Tauri fs 插件读取文件
+                try {
+                    fileData = await tauri.fs.readFile(filePath);
+                    fileSize = fileData.length;
+                    console.log("[JS-API] 文件读取成功:", fileSize, "字节");
+                } catch (fsError) {
+                    console.error("[JS-API] Tauri fs 读取失败:", fsError);
+                    throw new Error("无法读取文件: " + fsError.message);
+                }
+                
+                // 获取文件元数据以获取真实文件名
+                try {
+                    const metadata = await tauri.fs.stat(filePath);
+                    console.log("[JS-API] 文件元数据:", metadata);
+                    
+                    // 尝试从元数据获取文件名
+                    if (metadata && metadata.name) {
+                        fileName = metadata.name;
+                    } else {
+                        // 如果元数据没有文件名，尝试从 URI 提取
+                        const uriParts = filePath.split('/');
+                        const lastPart = decodeURIComponent(uriParts[uriParts.length - 1]);
+                        
+                        // Android document URI 格式: image:1000019150
+                        // 我们需要猜测扩展名
+                        if (lastPart.startsWith('image:')) {
+                            fileName = lastPart.split(':')[1] + '.jpg';
+                        } else if (lastPart.startsWith('video:')) {
+                            fileName = lastPart.split(':')[1] + '.mp4';
+                        } else if (lastPart.startsWith('audio:')) {
+                            fileName = lastPart.split(':')[1] + '.mp3';
+                        } else {
+                            fileName = lastPart.includes(':') ? lastPart.split(':')[1] : lastPart;
+                        }
+                    }
+                } catch (statError) {
+                    console.warn("[JS-API] 无法获取文件元数据:", statError);
+                    // 降级方案：使用时间戳作为文件名
+                    fileName = `file_${Date.now()}.dat`;
+                }
+                
+                if (!fileName || fileName === '') {
+                    fileName = `file_${Date.now()}.dat`;
+                }
+                
+                console.log("[JS-API] 最终文件名:", fileName);
+            } else {
+                // 桌面端普通路径 - 直接调用后端命令
+                console.log("[JS-API] 桌面端普通路径，调用后端命令");
+                const result = await tauri.core.invoke('send_file', {
+                    peerId,
+                    peerAddr,
+                    filePath
+                });
+                console.log("[JS-API] 文件发送成功:", result);
+                return result;
+            }
+            
+            // Android: 将文件数据发送到对方服务器
+            console.log("[JS-API] 准备上传 Android 文件到:", peerAddr);
+            
+            // 获取自己的 ID
+            const myId = await apiGetMyId();
+            
+            // 构造 FormData
+            const formData = new FormData();
+            formData.append('peer_id', myId);
+            formData.append('file', new Blob([fileData]), fileName);
+            
+            // 上传到对方的服务器
+            const uploadUrl = `http://${peerAddr}/api/upload`;
+            console.log("[JS-API] 上传到:", uploadUrl, "文件:", fileName, fileSize, "字节");
+            
+            const resp = await fetch(uploadUrl, {
+                method: 'POST',
+                body: formData,
+                mode: 'cors',
             });
             
-            console.log("[JS-API] 文件发送成功:", result);
-            return result;
+            console.log("[JS-API] 响应状态:", resp.status);
+            
+            if (!resp.ok) {
+                const errorText = await resp.text();
+                console.error("[JS-API] 上传失败:", errorText);
+                throw new Error(`HTTP ${resp.status}: ${errorText}`);
+            }
+            
+            const result = await resp.json();
+            console.log("[JS-API] Android 文件上传成功:", result);
+            
+            // Android 端需要手动保存消息到数据库
+            try {
+                console.log("[JS-API] 保存文件发送记录到数据库");
+                
+                // 调用后端保存消息
+                await tauri.core.invoke('save_file_message', {
+                    peerId: peerId,
+                    fileName: fileName,
+                    fileSize: fileSize,
+                    filePath: filePath,
+                    status: 'sent'
+                });
+                
+                console.log("[JS-API] 文件消息已保存到数据库");
+            } catch (saveError) {
+                console.error("[JS-API] 保存消息失败:", saveError);
+                // 不影响文件发送结果
+            }
+            
+            return {
+                success: true,
+                file_id: result.file_id || '',
+                file_name: fileName,
+                file_size: fileSize,
+            };
+            
         } catch (e) {
-            console.error("[JS-API] 桌面端文件发送失败:", e);
-            throw new Error("发送失败: " + e);
+            console.error("[JS-API] 文件发送失败:", e);
+            throw new Error("发送失败: " + e.message);
         }
     } else {
         // Web 端 - 通过 HTTP 上传

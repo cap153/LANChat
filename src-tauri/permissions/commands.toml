@@ -78,3 +78,8 @@ commands.allow = ["get_default_download_path"]
 identifier = "allow-request-storage-permission"
 description = "Allows requesting storage permission on Android"
 commands.allow = ["request_storage_permission"]
+
+[[permission]]
+identifier = "allow-save-file-message"
+description = "Allows saving file message to database"
+commands.allow = ["save_file_message"]

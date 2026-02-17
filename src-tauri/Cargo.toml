@@ -60,6 +60,7 @@ socket2 = { version = "0.5", features = ["all"] }
 directories = "5.0"
 dirs = "5.0"
 reqwest = { version = "0.12", features = ["multipart", "json"] }
+urlencoding = "2.1"
 
 # Android平台需要vendored OpenSSL
 [target.'cfg(target_os = "android")'.dependencies]

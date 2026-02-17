@@ -29,6 +29,7 @@
     "allow-get-current-theme",
     "allow-accept-file",
     "allow-get-default-download-path",
-    "allow-request-storage-permission"
+    "allow-request-storage-permission",
+    "allow-save-file-message"
   ]
 }

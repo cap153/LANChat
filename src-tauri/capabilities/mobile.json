@@ -9,6 +9,10 @@
     "core:event:default",
     "core:path:default",
     "fs:default",
+    "fs:allow-read-file",
+    "fs:allow-read",
+    "fs:allow-exists",
+    "fs:allow-stat",
     "dialog:default",
     "sql:default",
     "log:default",
@@ -27,6 +31,12 @@
     "allow-get-current-theme",
     "allow-accept-file",
     "allow-get-default-download-path",
-    "allow-request-storage-permission"
-  ]
+    "allow-request-storage-permission",
+    "allow-save-file-message"
+  ],
+  "scope": {
+    "allow": [
+      { "path": "**" }
+    ]
+  }
 }

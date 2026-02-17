@@ -108,6 +108,7 @@ pub async fn get_chat_history(
 
 #[tauri::command]
 pub async fn send_file(
+    _app: tauri::AppHandle,
     state: State<'_, DbState>,
     peer_id: String,
     peer_addr: String,
@@ -115,18 +116,79 @@ pub async fn send_file(
 ) -> Result<serde_json::Value, String> {
     println!("[Command] 收到发送文件请求: {} -> {} ({})", file_path, peer_addr, peer_id);
     
+    // 检测是否是 Android content URI
+    let is_content_uri = file_path.starts_with("content://");
+    println!("[Command] 文件路径类型: {}", if is_content_uri { "content URI" } else { "普通路径" });
+    
     // 获取文件名和大小
-    let file_name = std::path::Path::new(&file_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or("无效的文件名")?
-        .to_string();
-    
-    let file_metadata = std::fs::metadata(&file_path)
-        .map_err(|e| format!("读取文件信息失败: {}", e))?;
-    let file_size = file_metadata.len() as usize;
-    
-    println!("[Command] 文件: {}, 大小: {} 字节", file_name, file_size);
+    let (file_name, file_size, file_data) = if is_content_uri {
+        // Android content URI 处理 - 使用 Tauri 的 fs 插件
+        println!("[Command] 处理 Android content URI: {}", file_path);
+        
+        // 从 URI 中提取文件名
+        let file_name = file_path
+            .split('/')
+            .last()
+            .and_then(|s| urlencoding::decode(s).ok())
+            .map(|s| {
+                // 移除可能的扩展名编码
+                let decoded = s.to_string();
+                // 如果包含 : 说明是 Android 的 document ID 格式，提取实际文件名
+                if let Some(idx) = decoded.rfind(':') {
+                    decoded[idx+1..].to_string()
+                } else {
+                    decoded
+                }
+            })
+            .unwrap_or_else(|| format!("file_{}.dat", chrono::Utc::now().timestamp()));
+        
+        println!("[Command] 提取的文件名: {}", file_name);
+        
+        // 读取文件内容
+        // 对于 Android content URI，tokio::fs::read 可能无法直接读取
+        // 我们需要特殊处理
+        let data = match tokio::fs::read(&file_path).await {
+            Ok(d) => {
+                println!("[Command] 成功读取文件");
+                d
+            }
+            Err(e) => {
+                println!("[Command] 标准读取失败: {}, 尝试其他方法", e);
+                
+                // 对于 Android content URI，返回更详细的错误信息
+                return Err(format!(
+                    "读取文件失败: {}. 路径: {}. \
+                    Android content URI 需要特殊处理，请确保文件可访问。",
+                    e, file_path
+                ));
+            }
+        };
+        
+        let size = data.len();
+        println!("[Command] 成功读取文件，大小: {} 字节", size);
+        
+        (file_name, size, data)
+    } else {
+        // 普通文件路径处理
+        let file_name = std::path::Path::new(&file_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or("无效的文件名")?
+            .to_string();
+        
+        let file_metadata = std::fs::metadata(&file_path)
+            .map_err(|e| format!("读取文件信息失败: {}", e))?;
+        let file_size = file_metadata.len() as usize;
+        
+        println!("[Command] 文件: {}, 大小: {} 字节", file_name, file_size);
+        
+        // 读取文件
+        let file_data = tokio::fs::read(&file_path)
+            .await
+            .map_err(|e| format!("读取文件失败: {}", e))?;
+        
+        (file_name, file_size, file_data)
+    };
     
     // 立即创建数据库记录（状态为 uploading）
     let timestamp = std::time::SystemTime::now()
@@ -155,23 +217,6 @@ pub async fn send_file(
             None
         }
     };
-    
-    // 读取文件
-    let file_data = tokio::fs::read(&file_path)
-        .await
-        .map_err(|e| {
-            // 删除失败的数据库记录
-            if let Some(id) = message_id {
-                let pool = state.pool.clone();
-                tokio::spawn(async move {
-                    let _ = sqlx::query("DELETE FROM messages WHERE id = ?")
-                        .bind(id)
-                        .execute(&pool)
-                        .await;
-                });
-            }
-            format!("读取文件失败: {}", e)
-        })?;
     
     // 构造 multipart 请求
     let client = reqwest::Client::builder()
@@ -391,4 +436,37 @@ pub async fn request_storage_permission() -> Result<bool, String> {
         // 桌面端不需要权限
         Ok(true)
     }
+}
+
+#[tauri::command]
+pub async fn save_file_message(
+    state: State<'_, DbState>,
+    peer_id: String,
+    file_name: String,
+    file_size: usize,
+    file_path: String,
+    status: String,
+) -> Result<(), String> {
+    println!("[Command] 收到前端请求: save_file_message");
+    println!("[Command] 文件: {}, 大小: {}, 状态: {}", file_name, file_size, status);
+    
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    
+    sqlx::query(
+        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, ?, 'file', ?, ?, ?)"
+    )
+    .bind(&peer_id)
+    .bind(&file_name)
+    .bind(timestamp)
+    .bind(&file_path)
+    .bind(&status)
+    .execute(&state.pool)
+    .await
+    .map_err(|e| format!("保存消息失败: {}", e))?;
+    
+    println!("[Command] 文件消息已保存到数据库");
+    Ok(())
 }
