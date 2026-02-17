@@ -63,50 +63,86 @@ h2::before {
     background: var(--bg-dark);
 }
 
-/* --- 顶部 Header --- */
+/* --- 底部状态栏--- */
 .header {
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 15px 25px;
-    background: rgba(40, 42, 54, 0.95);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(189, 147, 249, 0.1);
+    
+    /* 核心调整：高度压到 22px */
+    height: 21px; 
+    padding: 0 10px;
+    
+    /* 背景改为深色，不再是亮紫色 */
+    background: #191a21; /* 极深的灰紫色，完美契合暗色主题 */
+    border-top: 1px solid #2b2d3e; /* 顶部加一条微弱的分割线 */
+    
+    /* 文字颜色改为低调的灰白色 */
+    color: #cccccc; 
+    font-size: 11px; /* 字体进一步缩小 */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     z-index: 20;
+    user-select: none;
+    line-height: 22px;
 }
 
-h1 {
+/* 左侧：用户名区域 */
+.header h1 {
     margin: 0;
-    font-size: 22px;
-    font-weight: 800;
-    background: var(--primary-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    font-size: 11px;
+    font-weight: 500; /* 不需要太粗 */
+    
+    /* 移除所有渐变 */
+    background: none;
+    -webkit-text-fill-color: initial;
+    color: inherit;
+    
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 100%;
 }
 
+/* 右侧按钮组 */
 .header-buttons {
     display: flex;
-    gap: 10px;
+    height: 100%;
+    gap: 0;
 }
 
+/* 按钮样式：完全扁平化 */
 .header-buttons button {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: var(--text-main);
-    padding: 8px 16px;
-    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: inherit;
+    padding: 0 8px; /* 左右间距改小 */
+    height: 100%;   /* 填满 22px */
+    border-radius: 0;
     cursor: pointer;
-    font-size: 13px;
-    transition: 0.3s;
-    font-weight: 500;
+    font-size: 11px;
+    font-weight: 400;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0.8;
+    transition: none; /* VS Code 按钮没有过渡动画，反应是即时的 */
 }
 
+/* 悬停效果：深色背景变稍微亮一点的灰色 */
 .header-buttons button:hover {
-    background: var(--primary);
-    border-color: var(--primary);
+    background: rgba(255, 255, 255, 0.08); 
     color: #fff;
-    box-shadow: 0 0 15px rgba(189, 147, 249, 0.4);
+    opacity: 1;
+    box-shadow: none;
+    border: none;
+}
+
+/* 修复 Emoji 导致的行高撑开问题 */
+.header-buttons button::first-letter {
+    font-size: 12px;
+    margin-right: 2px;
+    line-height: 1;
 }
 
 /* --- 主内容区 --- */

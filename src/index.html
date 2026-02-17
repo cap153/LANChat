@@ -1,22 +1,12 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="css/style.css">
-    <title>LANChat</title>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1 id="my-name">正在加载...</h1>
-            <div class="header-buttons">
-                <button id="edit-name-btn">✏️ 改名</button>
-                <button id="settings-btn">⚙️ 设置</button>
-                <button id="theme-btn">🎨 主题</button>
-            </div>
-        </div>
-        
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="css/style.css">
+        <title>LANChat</title>
+    </head>
+    <body>
         <div id="edit-name-panel" class="edit-panel" style="display: none;">
             <input type="text" id="new-name-input" placeholder="输入新名字" maxlength="50">
             <div class="button-group">
@@ -25,7 +15,6 @@
             </div>
             <div id="error-msg" class="error-msg"></div>
         </div>
-        
         <div id="settings-panel" class="settings-panel" style="display: none;">
             <h2>设置</h2>
             <div class="settings-content">
@@ -44,7 +33,6 @@
                 <div id="settings-error-msg" class="error-msg"></div>
             </div>
         </div>
-        
         <div id="theme-panel" class="theme-panel" style="display: none;">
             <h2>主题选择</h2>
             <div class="theme-content">
@@ -62,31 +50,38 @@
                 <div id="theme-error-msg" class="error-msg"></div>
             </div>
         </div>
-        
-        <div class="main-content">
-            <div class="user-list-container">
-                <ul id="user-list"></ul>
-            </div>
-            
-            <div class="chat-container" id="chat-container" style="display: none;">
-                <div class="chat-header">
-                    <span id="chat-with-name">选择用户开始聊天</span>
-                    <button id="close-chat-btn">✕</button>
+        <div class="container">
+            <div class="main-content">
+                <div class="user-list-container">
+                    <ul id="user-list">
+                    </ul>
                 </div>
-                <div class="chat-messages" id="chat-messages"></div>
-                <div class="chat-input-container">
-                    <input type="file" id="file-input" style="display: none;" />
-                    <button id="attach-file-btn" title="发送文件">📎</button>
-                    <input type="text" id="chat-input" placeholder="输入消息..." />
-                    <button id="send-btn">发送</button>
+                <div class="chat-container" id="chat-container" style="display: none;">
+                    <div class="chat-header">
+                        <span id="chat-with-name">选择用户开始聊天</span>
+                        <button id="close-chat-btn">✕</button>
+                    </div>
+                    <div class="chat-messages" id="chat-messages"></div>
+                    <div class="chat-input-container">
+                        <input type="file" id="file-input" style="display: none;" />
+                        <button id="attach-file-btn" title="发送文件">📎</button>
+                        <input type="text" id="chat-input" placeholder="输入消息..." />
+                        <button id="send-btn">发送</button>
+                    </div>
+                </div>
+            </div>
+            <div class="header">
+                <h1 id="my-name">正在加载...</h1>
+                <div class="header-buttons">
+                    <button id="edit-name-btn">改名</button>
+                    <button id="settings-btn">设置</button>
+                    <button id="theme-btn">主题</button>
                 </div>
             </div>
         </div>
-    </div>
-    
-    <!-- 引入 JS -->
-    <script src="js/api.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/app.js"></script>
-</body>
+        <!-- 引入 JS -->
+        <script src="js/api.js"></script>
+        <script src="js/ui.js"></script>
+        <script src="js/app.js"></script>
+    </body>
 </html>
