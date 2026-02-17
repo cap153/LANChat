@@ -118,6 +118,22 @@ async function apiUpdateSettings(downloadPath) {
     }
 }
 
+// 获取默认下载路径
+async function apiGetDefaultDownloadPath() {
+    const tauri = getTauri();
+    
+    if (tauri) {
+        try {
+            return await tauri.core.invoke('get_default_download_path');
+        } catch (e) {
+            console.error("[JS-API] 获取默认路径失败:", e);
+            return '/storage/emulated/0/Download/LANChat';
+        }
+    } else {
+        return '/tmp/lanchat';
+    }
+}
+
 async function apiUpdateMyName(newName) {
     const tauri = getTauri();
     

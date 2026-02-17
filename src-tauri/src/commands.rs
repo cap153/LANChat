@@ -1,34 +1,26 @@
-// commands.rs - 仅用于桌面端的 Tauri 命令
-#[cfg(feature = "desktop")]
+// commands.rs - Tauri 命令（桌面端和移动端共享）
 use crate::db::DbState;
-#[cfg(feature = "desktop")]
 use crate::peers::{Peer, PeerManager};
-#[cfg(feature = "desktop")]
 use std::sync::Arc;
-#[cfg(feature = "desktop")]
 use tauri::State;
 
 // 用于管理 PeerManager 的状态
-#[cfg(feature = "desktop")]
 pub struct PeerState {
     pub manager: Arc<PeerManager>,
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn get_my_name(state: State<'_, DbState>) -> Result<String, String> {
     println!("[Command] 收到前端请求: get_my_name");
     crate::db::get_username(&state.pool).await
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn get_my_id(state: State<'_, DbState>) -> Result<String, String> {
     println!("[Command] 收到前端请求: get_my_id");
     crate::db::get_user_id(&state.pool).await
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn get_settings(state: State<'_, DbState>) -> Result<serde_json::Value, String> {
     println!("[Command] 收到前端请求: get_settings");
@@ -40,7 +32,6 @@ pub async fn get_settings(state: State<'_, DbState>) -> Result<serde_json::Value
     }))
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn update_settings(
     state: State<'_, DbState>,
@@ -55,7 +46,6 @@ pub async fn update_settings(
     Ok(())
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn update_my_name(state: State<'_, DbState>, new_name: String) -> Result<String, String> {
     println!("[Command] 收到前端请求: update_my_name, 新名字: {}", new_name);
@@ -70,13 +60,11 @@ pub async fn update_my_name(state: State<'_, DbState>, new_name: String) -> Resu
     Ok(new_name)
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn get_peers(state: State<'_, PeerState>) -> Result<Vec<Peer>, String> {
     Ok(state.manager.get_all_peers())
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn send_message(
     state: State<'_, DbState>,
@@ -110,7 +98,6 @@ pub async fn send_message(
     Ok(())
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn get_chat_history(
     state: State<'_, DbState>,
@@ -119,7 +106,6 @@ pub async fn get_chat_history(
     crate::network::messaging::get_chat_history(&state.pool, &peer_id, 100).await
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn send_file(
     state: State<'_, DbState>,
@@ -278,7 +264,6 @@ pub async fn send_file(
     }))
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn get_theme_list() -> Result<Vec<serde_json::Value>, String> {
     println!("[Command] 收到前端请求: get_theme_list");
@@ -319,7 +304,6 @@ pub async fn get_theme_list() -> Result<Vec<serde_json::Value>, String> {
     Ok(themes)
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn get_theme_css(theme_name: String) -> Result<String, String> {
     println!("[Command] 收到前端请求: get_theme_css, 主题: {}", theme_name);
@@ -342,7 +326,6 @@ pub async fn get_theme_css(theme_name: String) -> Result<String, String> {
     Ok(css_content)
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn save_current_theme(state: State<'_, DbState>, theme_name: String) -> Result<(), String> {
     println!("[Command] 收到前端请求: save_current_theme, 主题: {}", theme_name);
@@ -358,7 +341,6 @@ pub async fn save_current_theme(state: State<'_, DbState>, theme_name: String) -
     Ok(())
 }
 
-#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn get_current_theme(state: State<'_, DbState>) -> Result<String, String> {
     println!("[Command] 收到前端请求: get_current_theme");
@@ -371,4 +353,42 @@ pub async fn get_current_theme(state: State<'_, DbState>) -> Result<String, Stri
     let theme = result.unwrap_or_else(|| "default".to_string());
     println!("[Command] 当前主题: {}", theme);
     Ok(theme)
+}
+
+#[tauri::command]
+pub async fn get_default_download_path() -> Result<String, String> {
+    println!("[Command] 收到前端请求: get_default_download_path");
+    
+    if cfg!(target_os = "android") {
+        // Android 的公共下载目录
+        let download_path = "/storage/emulated/0/Download/LANChat";
+        println!("[Command] Android 默认下载路径: {}", download_path);
+        Ok(download_path.to_string())
+    } else {
+        // 桌面端和 Web 端返回用户下载目录
+        let home_dir = dirs::home_dir().ok_or("无法获取用户主目录")?;
+        let download_path = home_dir.join("Downloads").join("LANChat");
+        println!("[Command] 默认下载路径: {}", download_path.display());
+        Ok(download_path.to_string_lossy().to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn request_storage_permission() -> Result<bool, String> {
+    println!("[Command] 收到前端请求: request_storage_permission");
+    
+    #[cfg(target_os = "android")]
+    {
+        // Android 上需要请求存储权限
+        // 注意：这个功能需要 Tauri 的 Android 插件支持
+        // 目前先返回 true，假设权限已授予
+        println!("[Command] Android 存储权限检查（假设已授予）");
+        return Ok(true);
+    }
+    
+    #[cfg(not(target_os = "android"))]
+    {
+        // 桌面端不需要权限
+        Ok(true)
+    }
 }

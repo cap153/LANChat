@@ -1,10 +1,9 @@
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "enables the default permissions",
-  "windows": [
-    "main"
-  ],
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Mobile platform permissions",
+  "platforms": ["android", "iOS"],
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "core:event:default",
@@ -13,7 +12,6 @@
     "dialog:default",
     "sql:default",
     "log:default",
-    "shell:default",
     "allow-get-my-name",
     "allow-get-my-id",
     "allow-update-my-name",

@@ -68,3 +68,13 @@ commands.allow = ["get_current_theme"]
 identifier = "allow-accept-file"
 description = "Allows accepting received files"
 commands.allow = ["accept_file"]
+
+[[permission]]
+identifier = "allow-get-default-download-path"
+description = "Allows getting the default download path"
+commands.allow = ["get_default_download_path"]
+
+[[permission]]
+identifier = "allow-request-storage-permission"
+description = "Allows requesting storage permission on Android"
+commands.allow = ["request_storage_permission"]

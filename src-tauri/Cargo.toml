@@ -5,7 +5,8 @@ edition = "2021"
 default-run = "lanchat"
 
 [lib]
-name = "lanchat" 
+name = "lanchat"
+crate-type = ["staticlib", "cdylib", "rlib"] 
 
 # 定义两个独立的二进制入口
 [[bin]]
@@ -59,5 +60,10 @@ socket2 = { version = "0.5", features = ["all"] }
 directories = "5.0"
 dirs = "5.0"
 reqwest = { version = "0.12", features = ["multipart", "json"] }
+
+# Android平台需要vendored OpenSSL
+[target.'cfg(target_os = "android")'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
+openssl-sys = { version = "0.9", features = ["vendored"] }
 
 

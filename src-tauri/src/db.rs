@@ -83,8 +83,13 @@ pub async fn get_download_path(pool: &sqlx::Pool<sqlx::Sqlite>) -> Result<String
         Ok((path,)) => Ok(path),
         Err(_) => {
             // 如果没有设置，返回默认路径
-            let default_path = std::env::temp_dir().join("lanchat_downloads");
-            Ok(default_path.to_str().unwrap().to_string())
+            if cfg!(target_os = "android") {
+                Ok("/storage/emulated/0/Download/LANChat".to_string())
+            } else {
+                let home_dir = dirs::home_dir().ok_or("无法获取用户主目录")?;
+                let default_path = home_dir.join("Downloads").join("LANChat");
+                Ok(default_path.to_string_lossy().to_string())
+            }
         }
     }
 }
@@ -207,10 +212,18 @@ async fn init_db_with_path(app_dir: PathBuf) -> Result<Pool<Sqlite>, sqlx::Error
             .execute(&pool)
             .await?;
 
-        // 初始保存路径（Web 端使用临时目录）
-        let download_dir = std::env::temp_dir().join("lanchat_downloads");
+        // 初始保存路径 - 统一使用 ~/Downloads/LANChat
+        let download_dir = if cfg!(target_os = "android") {
+            "/storage/emulated/0/Download/LANChat".to_string()
+        } else {
+            let home_dir = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+            home_dir.join("Downloads").join("LANChat").to_string_lossy().to_string()
+        };
+        
+        println!("[DB] 设置默认下载路径: {}", download_dir);
+        
         sqlx::query("INSERT INTO settings (key, value) VALUES ('download_path', ?)")
-            .bind(download_dir.to_str().unwrap())
+            .bind(download_dir)
             .execute(&pool)
             .await?;
     }

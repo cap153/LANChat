@@ -769,3 +769,103 @@ h2::before {
     background: rgba(189, 147, 249, 0.2);
     border: 1px solid var(--primary);
 }
+
+/* Android 路径选择面板 */
+.android-path-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #282a36;  /* 使用明确的深色背景 */
+    border: 1px solid #44475a;
+    border-radius: 8px;
+    padding: 20px;
+    z-index: 1001;
+    min-width: 300px;
+    max-width: 90%;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
+}
+
+/* 添加遮罩层 */
+.android-path-panel::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);  /* 更深的遮罩 */
+    z-index: -1;
+}
+
+.android-path-panel h2 {
+    margin: 0 0 15px 0;
+    color: #f8f8f2;  /* 明确的文字颜色 */
+    font-size: 18px;
+}
+
+.android-path-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.path-option {
+    padding: 12px;
+    background: #21222c;  /* 明确的背景色 */
+    border: 2px solid #44475a;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.path-option:hover {
+    border-color: #bd93f9;
+    background: #44475a;
+}
+
+.path-option:active {
+    transform: scale(0.98);
+}
+
+.path-name {
+    font-weight: bold;
+    color: #f8f8f2;  /* 明确的文字颜色 */
+    margin-bottom: 4px;
+}
+
+.path-value {
+    font-size: 12px;
+    color: #b3b3b3;  /* 明确的次要文字颜色 */
+    word-break: break-all;
+}
+
+.custom-path-input {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.custom-path-input input {
+    flex: 1;
+    padding: 8px;
+    background: #21222c;  /* 明确的背景色 */
+    border: 1px solid #44475a;
+    border-radius: 4px;
+    color: #f8f8f2;  /* 明确的文字颜色 */
+    font-size: 14px;
+}
+
+.custom-path-input button {
+    padding: 8px 16px;
+    background: #bd93f9;  /* 明确的按钮颜色 */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.custom-path-input button:hover {
+    opacity: 0.9;
+}

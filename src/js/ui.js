@@ -659,20 +659,30 @@ function initSettings() {
     // 选择路径
     choosePathBtn.addEventListener('click', async () => {
         const tauri = window.__TAURI__;
-        if (tauri) {
+        const isAndroid = tauri && navigator.userAgent.includes('Android');
+        
+        if (isAndroid) {
+            // Android - 显示路径选择面板
+            const androidPathPanel = document.getElementById('android-path-panel');
+            androidPathPanel.style.display = 'block';
+        } else if (tauri) {
             // 桌面端 - 使用 Tauri 对话框
             try {
+                const defaultPath = await apiGetDefaultDownloadPath();
                 const selected = await tauri.dialog.open({
                     directory: true,
                     multiple: false,
-                    title: '选择下载文件夹'
+                    title: '选择下载文件夹',
+                    defaultPath: downloadPathInput.value || defaultPath
                 });
                 
                 if (selected) {
                     const path = Array.isArray(selected) ? selected[0] : selected;
                     downloadPathInput.value = path;
+                    settingsErrorMsg.textContent = '';
                 }
             } catch (e) {
+                console.error('[UI] 文件选择器错误:', e);
                 settingsErrorMsg.textContent = '选择路径失败: ' + e.message;
             }
         } else {
@@ -682,6 +692,35 @@ function initSettings() {
                 downloadPathInput.value = newPath;
             }
         }
+    });
+    
+    // Android 路径选择面板逻辑
+    const androidPathPanel = document.getElementById('android-path-panel');
+    const pathOptions = document.querySelectorAll('.path-option');
+    const customPathInput = document.getElementById('custom-path-input');
+    const useCustomPathBtn = document.getElementById('use-custom-path-btn');
+    const cancelAndroidPathBtn = document.getElementById('cancel-android-path-btn');
+    
+    pathOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            const path = option.getAttribute('data-path');
+            downloadPathInput.value = path;
+            androidPathPanel.style.display = 'none';
+        });
+    });
+    
+    useCustomPathBtn.addEventListener('click', () => {
+        const customPath = customPathInput.value.trim();
+        if (customPath) {
+            downloadPathInput.value = customPath;
+            androidPathPanel.style.display = 'none';
+            customPathInput.value = '';
+        }
+    });
+    
+    cancelAndroidPathBtn.addEventListener('click', () => {
+        androidPathPanel.style.display = 'none';
+        customPathInput.value = '';
     });
     
     // 保存设置

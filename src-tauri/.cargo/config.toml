@@ -1,0 +1,22 @@
+# Android 交叉编译配置
+# NDK 路径会自动从 ANDROID_HOME 或 NDK_HOME 环境变量中获取
+
+[target.aarch64-linux-android]
+ar = "llvm-ar"
+linker = "aarch64-linux-android21-clang"
+
+[target.armv7-linux-androideabi]
+ar = "llvm-ar"
+linker = "armv7a-linux-androideabi21-clang"
+
+[target.i686-linux-android]
+ar = "llvm-ar"
+linker = "i686-linux-android21-clang"
+
+[target.x86_64-linux-android]
+ar = "llvm-ar"
+linker = "x86_64-linux-android21-clang"
+
+# 为 Android 目标强制使用 vendored OpenSSL
+[env]
+OPENSSL_STATIC = "1"
