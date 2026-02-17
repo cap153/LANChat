@@ -48,25 +48,7 @@ export RANLIB=$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86
 
 ### 运行
 
-#### 桌面端
-```bash
-cd src-tauri
-cargo run --bin lanchat
-```
-
-#### Web 端
-```bash
-# 使用默认配置（端口 8888，与桌面端共享数据库）
-./start-web.sh
-
-# 指定端口
-./start-web.sh 9000
-
-# 使用自定义数据库路径
-./start-web.sh 8888 /custom/path
-```
-
-然后在浏览器访问: `http://localhost:8888`
+文档编写中，后续完善。。。
 
 **注意**: 桌面端和 Web 端默认共享同一个数据库，因此用户名和聊天记录是同步的！
 
@@ -112,7 +94,6 @@ LANChat/
 桌面端和 Web 端共享同一个数据库：
 - **Linux**: `~/.local/share/com.lanchat.app/lanchat.db`
 - **Windows**: `%APPDATA%\com.lanchat.app\lanchat.db`
-- **macOS**: `~/Library/Application Support/com.lanchat.app/lanchat.db`
 
 ### 数据表
 - `settings` - 用户配置（用户名、自动接收、保存路径等）
@@ -130,19 +111,17 @@ LANChat/
 - [x] 实时显示在线用户
 - [x] Web 端独立部署
 - [x] 桌面端和 Web 端共享数据库
+- [x] 设置页面
+- [x] 消息历史记录查询
+- [x] Android 端适配
+- [x] 文本消息传输
+- [x] 文件传输功能
 
 ### 🚧 进行中
-- [ ] 文本消息传输
-- [ ] 文件传输功能
-- [ ] 聊天界面 UI
+- [ ] Windows 端测试
 
 ### 📋 计划中
-- [ ] 消息历史记录查询
-- [ ] 设置页面
-- [ ] 文件自动接收配置
 - [ ] 文件重新下载
-- [ ] Android 端适配
-- [ ] Windows 端测试
 
 ## 开发
 
@@ -154,19 +133,6 @@ LANChat/
 # 在另一个终端运行测试
 ./test-web-api.sh
 ```
-
-### 查看日志
-```bash
-# 桌面端
-RUST_LOG=debug cargo run --bin lanchat
-
-# Web 端
-RUST_LOG=debug ./src-tauri/target/debug/lanchat-web
-```
-
-## 部署
-
-详细的 Web 端部署说明请参考 [WEB_DEPLOYMENT.md](WEB_DEPLOYMENT.md)
 
 ### 快速部署到服务器
 

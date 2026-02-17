@@ -37,3 +37,5 @@ Thumbs.db
 
 # Test files
 test_compile.sh
+# key files
+lanchat-release.keystore
