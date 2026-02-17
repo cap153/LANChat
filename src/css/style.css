@@ -340,6 +340,10 @@ h2::before {
 	background: var(--bg-panel);
 	position: relative;
 	overflow: hidden;
+	will-change: transform;
+	/* 提前告诉 GPU 这个层会变，减少 Null anb 报错 */
+	backface-visibility: hidden;
+	/* 强制开启硬件加速，减少渲染冲突 */
 }
 
 .chat-header {
@@ -919,6 +923,10 @@ h2::before {
 		padding-top: env(safe-area-inset-top);
 		/* 3. 必须加上这个，否则 padding 会导致高度溢出出现滚动条 */
 		box-sizing: border-box;
+		will-change: transform, opacity;
+		backface-visibility: hidden;
+		-webkit-backface-visibility: hidden;
+		/* 兼容部分安卓 WebView */
 	}
 
 	/* 移动端输入区域调整 */

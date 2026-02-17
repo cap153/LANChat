@@ -219,13 +219,25 @@ function initChat() {
 	});
 }
 
-// --- 核心手术：修改原有的两个函数 ---
+// --- 赛博加固版 JS ---
 
-// 打开聊天窗口
+// 1. 打开聊天
 function openChat(peer) {
+	// [检查点]：如果已经是当前聊天的用户，且窗口开着，就别折腾了
+	const chatContainer = document.getElementById('chat-container');
+	if (window.currentChatPeer && window.currentChatPeer.id === peer.id && chatContainer.style.display === 'flex') {
+		return;
+	}
+
+	// [关键修复]：如果是在手机端，确保 Hash 状态同步
+	if (window.innerWidth <= 768) {
+		if (window.location.hash !== '#chat') {
+			window.history.pushState({ chatOpen: true }, "", "#chat");
+		}
+	}
+
 	window.currentChatPeer = peer;
 
-	const chatContainer = document.getElementById('chat-container');
 	const chatWithName = document.getElementById('chat-with-name');
 	const chatMessages = document.getElementById('chat-messages');
 
@@ -233,69 +245,50 @@ function openChat(peer) {
 	chatWithName.textContent = `${peer.name}`;
 	chatMessages.innerHTML = '';
 
-	// 高亮选中的用户
-	const userList = document.getElementById('user-list');
-	const items = userList.querySelectorAll('li');
+	// 高亮逻辑
+	updateListHighlight(peer.id);
+
+	window.lastMessageTimestamp = 0;
+	loadChatHistory(peer.id);
+	console.log('[UI] 成功进入聊天:', peer.name);
+}
+
+// 2. 关闭聊天（由 X 按钮或物理返回键调用）
+function closeChat() {
+	// 如果是手机端且有 #chat，点击 X 按钮时触发 back() 即可，剩下的交给 popstate
+	if (window.innerWidth <= 768 && window.location.hash === '#chat') {
+		window.history.back();
+		return;
+	}
+	performCloseChatUI();
+}
+
+// 3. 真正的 UI 隐藏逻辑（只管藏，不管历史记录）
+function performCloseChatUI() {
+	const chatContainer = document.getElementById('chat-container');
+	if (chatContainer) chatContainer.style.display = 'none';
+	window.currentChatPeer = null;
+	updateListHighlight(null); // 清除高亮
+}
+
+// 4. 辅助函数：更新高亮
+function updateListHighlight(activeId) {
+	const items = document.querySelectorAll('#user-list li');
 	items.forEach(item => {
-		if (item.dataset.id === peer.id) {
+		if (activeId && item.dataset.id === activeId) {
 			item.classList.add('active');
 		} else {
 			item.classList.remove('active');
 		}
 	});
-
-	// [新增手术点 1]：如果是移动端，推入一条历史记录，用来拦截物理返回键
-	if (window.innerWidth <= 768) {
-		// 防止重复 push
-		if (window.location.hash !== '#chat') {
-			window.history.pushState({ chatOpen: true }, "", "#chat");
-		}
-	}
-
-	window.lastMessageTimestamp = 0;
-	loadChatHistory(peer.id);
-
-	console.log('[UI] 打开与', peer.name, '的聊天窗口');
 }
 
-// 关闭聊天窗口
-function closeChat() {
-	// [新增手术点 2]：如果是点击 UI 上的关闭按钮，且当前在聊天状态（有 #chat 标记）
-	// 我们手动触发一次历史后退，让底下的 popstate 监听器去执行真正的 UI 关闭逻辑
-	if (window.innerWidth <= 768 && window.location.hash === '#chat') {
-		window.history.back();
-		return; // 交给下面的 popstate 处理，这里直接退出
-	}
-
-	// 真正的 UI 隐藏逻辑提取到这里（兼容桌面端直接调用）
-	performCloseChatUI();
-}
-
-// [新增手术点 3]：提取纯粹的 UI 关闭逻辑，供内部调用
-function performCloseChatUI() {
-	window.currentChatPeer = null;
-
-	const chatContainer = document.getElementById('chat-container');
-	chatContainer.style.display = 'none';
-
-	// 取消高亮
-	const userList = document.getElementById('user-list');
-	const items = userList.querySelectorAll('li');
-	items.forEach(item => item.classList.remove('active'));
-
-	console.log('[UI] 聊天窗口已关闭 (UI 层)');
-}
-
-// --- 核心手术：添加全局返回键监听器 (粘贴在 JS 文件末尾即可) ---
-
+// 5. [最关键的手术] 全局监听器：处理物理返回键和手动后退
 window.addEventListener('popstate', function(event) {
-	// 当监听到后退动作（比如 Android 物理返回键）
-	// 如果聊天窗口当前是打开状态，则执行隐藏
-	if (window.innerWidth <= 768) {
-		const chatContainer = document.getElementById('chat-container');
-		if (chatContainer && chatContainer.style.display !== 'none') {
-			performCloseChatUI();
-		}
+	const chatContainer = document.getElementById('chat-container');
+	// 如果检测到 URL 里没有 #chat 了，但窗口还开着，强制关掉它
+	if (window.location.hash !== '#chat') {
+		performCloseChatUI();
 	}
 });
 
