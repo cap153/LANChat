@@ -857,13 +857,25 @@ async function applyTheme(themeName) {
         existingCustomStyle.remove();
     }
     
+    // 获取默认样式表
+    const defaultStylesheet = document.querySelector('link[href="css/style.css"]');
+    
     if (themeName === 'default') {
+        // 恢复默认主题：启用默认CSS
+        if (defaultStylesheet) {
+            defaultStylesheet.disabled = false;
+        }
         console.log('[UI] 应用默认主题');
         return;
     }
     
     // 获取自定义主题CSS
     const css = await apiGetThemeCss(themeName);
+    
+    // 禁用默认样式表
+    if (defaultStylesheet) {
+        defaultStylesheet.disabled = true;
+    }
     
     // 创建新的style元素
     const styleElement = document.createElement('style');
@@ -873,7 +885,7 @@ async function applyTheme(themeName) {
     // 添加到head中
     document.head.appendChild(styleElement);
     
-    console.log('[UI] 应用自定义主题:', themeName);
+    console.log('[UI] 应用自定义主题:', themeName, '(已禁用默认CSS)');
 }
 
 // 加载保存的主题

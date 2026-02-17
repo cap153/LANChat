@@ -1,53 +1,598 @@
-/* VSCode 主题 - 示例 */
 :root {
-    /* VSCode Dark 配色 */
-    --bg-dark: #1e1e1e;
-    --bg-panel: #252526;
-    --bg-light: #2d2d30;
-    --primary: #007acc;
-    --primary-hover: #1177bb;
-    --primary-gradient: linear-gradient(135deg, #007acc 0%, #005a9e 100%);
-    --text-main: #cccccc;
-    --text-dim: #969696;
-    --success: #4ec9b0;
-    --warning: #dcdcaa;
-    --error: #f44747;
-    --radius-lg: 4px;
-    --radius-md: 4px;
-    --radius-pill: 4px;
-    --radius-btn: 4px;
+    --bg: #1e1e1e;
+    --sidebar: #252526;
+    --text: #d4d4d4;
+    --keyword: #569cd6;   /* let, fn */
+    --string: #ce9178;    /* "string" */
+    --macro: #dcdcaa;     /* println! */
+    --comment: #6a9955;   /* // comments */
+    --class: #4ec9b0;     /* File */
+    --method: #dcdcaa;    /* unwrap */
+    --number: #b5cea8;
+    --border: #333333;
+    --statusbar: #007acc;
+    --font: 'Consolas', 'JetBrains Mono', monospace;
 }
 
-/* 覆盖按钮样式 */
-button {
-    border-radius: var(--radius-btn) !important;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    height: 100vh;
+    overflow: hidden;
+    font-size: 14px;
 }
 
-/* 覆盖输入框样式 */
-input[type="text"], input[type="file"] {
-    border-radius: var(--radius-btn) !important;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+/* --- 1. 宏观布局 --- */
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
 }
 
-/* 消息样式 */
-.message {
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
-    border-radius: var(--radius-btn) !important;
+.main-content {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    overflow: hidden;
 }
 
-/* 标题样式 */
-h1, h2 {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+/* --- 2. 侧边栏 (Explorer) --- */
+.user-list-container {
+    width: 240px;
+    background: var(--sidebar);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding-top: 10px;
+    flex-shrink: 0;
 }
 
-/* 用户列表项 */
+.user-list-container::before {
+    content: "EXPLORER";
+    font-size: 11px;
+    padding: 0 20px;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #bbb;
+    letter-spacing: 1px;
+}
+
+#user-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#user-list::before {
+    content: "▼ LAN_CHAT\00000a  ▼ src";
+    white-space: pre;
+    padding-left: 10px;
+    line-height: 22px;
+    font-weight: bold;
+    color: #ccc;
+    display: block;
+}
+
+#user-list::after {
+    content: "  ▸ target\00000a  🦀 Cargo.toml\00000a  🔒 Cargo.lock";
+    white-space: pre;
+    padding-left: 10px;
+    line-height: 22px;
+    color: #ccc;
+    display: block;
+    margin-top: 5px;
+}
+
 #user-list li {
-    border-radius: var(--radius-btn) !important;
+    padding: 2px 0 2px 35px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    color: #ccc;
+}
+#user-list li:hover { background: #2a2d2e; }
+#user-list li.active { background: #37373d; color: #fff; }
+
+#user-list li::before {
+    content: "R";
+    color: #dea584;
+    font-weight: bold;
+    font-family: serif;
+    margin-right: 6px;
+    font-size: 12px;
+}
+.user-name::after { content: ".rs"; opacity: 0.6; }
+.user-addr { display: none; }
+
+/* --- 3. 聊天主区 --- */
+.chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
 }
 
-/* 面板样式 */
+.chat-header {
+    height: 35px;
+    background: #2d2d2d;
+    display: flex;
+    align-items: center;
+    padding: 0;
+    border-bottom: none;
+    flex-shrink: 0;
+}
+
+#chat-with-name {
+    background: var(--bg);
+    color: #fff;
+    height: 35px;
+    padding: 0 15px;
+    min-width: 100px;
+    display: flex;
+    align-items: center;
+    border-top: 1px solid #007acc;
+    font-size: 13px;
+    position: relative;
+}
+#chat-with-name::after { content: ".rs"; margin-left: 2px; }
+#chat-with-name::before { content: "R "; color: #dea584; margin-right: 5px; font-family: serif;}
+
+#close-chat-btn {
+    background: transparent;
+    border: none;
+    color: #999;
+    margin-left: 10px;
+    cursor: pointer;
+    font-size: 14px;
+}
+#close-chat-btn:hover { background: #444; border-radius: 3px; color: #fff; }
+
+/* --- 4. 消息区域 (关键修复) --- */
+.chat-messages {
+    flex: 1;
+    padding: 10px 0;
+    overflow-y: auto;
+    counter-reset: line 0;
+}
+
+/* 消息行容器：强制单行，垂直居中 */
+.message {
+    display: flex;
+    padding: 0 10px;
+    align-items: center; /* 关键：让行号、代码、时间在同一水平线 */
+    font-family: var(--font);
+    line-height: 1.5;
+    margin-bottom: 2px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 行号 */
+.message::before {
+    counter-increment: line;
+    content: counter(line);
+    color: #858585;
+    width: 30px;
+    text-align: right;
+    margin-right: 20px;
+    font-size: 13px;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+/* 时间戳 -> 行尾注释 */
+/* 使用 margin-left: auto 把它推到最右边，或者固定在右侧 */
+.message-time {
+    color: var(--comment);
+    margin-left: auto; /* 推到最右侧 */
+    padding-right: 10px;
+    font-style: italic;
+    white-space: nowrap;
+    user-select: none;
+    font-size: 13px;
+    order: 99; /* 确保在最后 */
+}
+.message-time::before { content: "// "; }
+
+
+/* 消息内容容器：去掉所有装饰，变成透明 */
+.message-content {
+    background: transparent !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: var(--string);
+    display: flex; /* 变成 flex 容器以便子元素排列 */
+    align-items: center;
+    max-width: none !important;
+    flex: 0 1 auto;
+}
+
+/* === 普通文本消息 === */
+/* 我发的消息：println! */
+/* 使用 :not(:has(...)) 避免影响文件消息，兼容性如果不行，下面有文件专用样式覆盖 */
+.message.sent .message-content:not(:has(.file-name))::before {
+    content: "println!(\"";
+    color: var(--macro);
+    white-space: pre;
+}
+.message.sent .message-content:not(:has(.file-name))::after {
+    content: "\");";
+    color: var(--text);
+}
+
+/* 别人发的消息：info! */
+.message.received .message-content:not(:has(.file-name))::before {
+    content: "info!(\"";
+    color: var(--keyword);
+    white-space: pre;
+}
+.message.received .message-content:not(:has(.file-name))::after {
+    content: "\");";
+    color: var(--text);
+}
+
+/* === 文件消息暴力修复 (File Message) === */
+
+/* 1. 强制文件容器为水平布局，去掉 padding/margin */
+.message-file {
+    display: flex !important;
+    flex-direction: row !important; /* 强制横排 */
+    align-items: center !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    width: auto !important;
+    height: auto !important;
+}
+
+/* 2. 隐藏原有的大图标 (svg, img, 或 icon div) */
+/* 假设你的图标是 .file-icon 或者直接是 img/svg */
+.message-file .file-icon, 
+.message-file img, 
+.message-file svg {
+    display: none !important;
+}
+
+/* 3. 文件信息区域：强制横排 */
+.file-info {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* 4. 隐藏多余信息 (大小、状态、下载进度) */
+.file-size, 
+.file-status, 
+.file-finish,
+.file-downloading,
+.file-pending {
+    display: none !important;
+}
+
+/* 5. 文件名样式：作为字符串显示 */
+.file-name {
+    font-size: 14px !important;
+    color: var(--string) !important;
+    font-family: var(--font) !important;
+    font-weight: normal !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: inline-block !important;
+}
+
+/* 1. 公共样式 (保持不变) */
+.message-file::before, .message-file::after {
+    font-family: var(--font);
+    font-size: 14px;
+    white-space: pre;
+}
+
+/* 2. 发送方 (Sent) -> 伪装成 tx (Transmit) */
+.message.sent .message-file::before {
+    /* 逻辑：打开本地文件 -> 发送 */
+    content: "let tx = File::open(\""; 
+    color: #dcdcaa; /* 方法名颜色 (淡黄) */
+}
+
+.message.sent .message-file::after {
+    /* 逻辑：unwrap 表示确认文件存在 */
+    content: "\").unwrap(); // Uploaded"; 
+    color: var(--text);
+}
+
+/* 3. 接收方 (Received) -> 伪装成 rx (Receive) */
+.message.received .message-file::before {
+    /* 逻辑：创建新文件 -> 写入接收的数据 */
+    content: "let rx = File::create(\""; 
+    color: #4ec9b0; /* 类名/结构体颜色 (青绿)，换个色区分一下 */
+}
+
+.message.received .message-file::after {
+    /* 逻辑：expect 说明正在等待写入 */
+    content: "\").expect(\"saved\");"; 
+    color: var(--text);
+}
+
+/* 4. 文件名颜色微调 (可选) */
+.message.sent .file-name {
+    color: #ce9178; /* 字符串颜色 (橘色) */
+}
+.message.received .file-name {
+    color: #9cdcfe; /* 变量颜色 (浅蓝) - 让接收的文件名看起来不一样 */
+}
+
+/* 给前面的 File::open 里的关键字上色 (进阶技巧，只能尽量模拟) */
+/* 由于 CSS content 不支持多色，我们只能让整段都是白色，或者利用透明度 */
+/* 如果你想让 File 高亮，只能通过更复杂的 HTML 结构，纯 CSS 这里只能统一颜色 */
+
+
+/* --- 5. 终端区域 --- */
+.chat-input-container {
+    height: 180px; /* 固定高度，防止被挤压 */
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    position: relative;
+}
+
+.chat-input-container::before {
+    content: "PROBLEMS   OUTPUT   DEBUG CONSOLE   TERMINAL";
+    font-size: 11px;
+    color: #aaa;
+    padding: 8px 20px;
+    font-weight: bold;
+    border-bottom: 1px solid var(--border);
+    word-spacing: 15px;
+    display: block;
+}
+
+/* 终端 Prompt */
+.chat-input-container::after {
+    content: "➜  lan-chat git:(main) ✗ cargo run";
+    position: absolute;
+    top: 35px;
+    left: 15px;
+    font-family: var(--font);
+    font-size: 13px;
+    color: #fff;
+    pointer-events: none;
+}
+
+#chat-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    padding: 10px;
+    margin-top: 25px;
+    margin-left: 10px;
+    width: 95%;
+    box-shadow: none;
+}
+#chat-input::placeholder { color: transparent; }
+
+/* 按钮组 */
+#attach-file-btn, #send-btn {
+    position: absolute;
+    top: 5px;
+    background: transparent;
+    border: none;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #aaa;
+    z-index: 10;
+}
+#attach-file-btn { right: 80px; }
+#attach-file-btn::before { content: "🐞"; }
+#attach-file-btn span, #attach-file-btn { font-size: 0; }
+#attach-file-btn::after { content: "Debug"; font-size: 12px; }
+
+#send-btn { right: 20px; }
+#send-btn::before { content: "▶"; color: #6a9955; }
+#send-btn span, #send-btn { font-size: 0; }
+#send-btn::after { content: "Run"; font-size: 12px; color: #aaa; }
+#send-btn:hover::after { color: #fff; }
+
+/* --- 6. 状态栏 --- */
+.header {
+    height: 22px;
+    background: var(--statusbar);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    font-size: 12px;
+    font-family: sans-serif;
+    flex-shrink: 0;
+    z-index: 100;
+}
+
+.header h1 {
+    font-size: 12px;
+    font-weight: normal;
+    color: #fff;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.header h1::before { content: "main*"; font-weight: bold; }
+.header h1::after { content: "ⓧ 0 ⚠ 0"; margin-left: 10px; font-weight: normal; }
+
+.header-buttons { display: flex; gap: 15px; margin-right: 10px; }
+.header-buttons button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    padding: 0;
+    font-size: 0;
+    cursor: default;
+}
+.header-buttons button:hover { background: rgba(255,255,255,0.2); }
+#edit-name-btn::before { content: "Ln 42, Col 10"; font-size: 12px; }
+#settings-btn::before { content: "UTF-8"; font-size: 12px; }
+#theme-btn::before { content: "Rust"; font-size: 12px; }
+
+/* --- 7. 弹窗 --- */
 .edit-panel, .settings-panel, .theme-panel {
-    border-radius: var(--radius-md) !important;
-    border: 1px solid #3c3c3c !important;
+    position: absolute; /* 绝对定位 */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* 完美居中 */
+    
+    width: 400px;
+    max-width: 90%;
+    
+    /* VS Code 菜单/弹窗风格 */
+    background: #252526; 
+    border: 1px solid #454545;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); /* 明显的阴影 */
+    border-radius: 5px; /* 稍微一点圆角 */
+    padding: 20px;
+    z-index: 2000; /* 保证在最顶层 */
+    
+    color: #cccccc;
+    display: none; /* 默认隐藏，由JS控制显示 */
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, -48%); }
+    to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* 标题 */
+.edit-panel h2, .settings-panel h2, .theme-panel h2 {
+    margin: 0 0 20px 0;
+    padding: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    border-bottom: 1px solid #454545; /* 标题分割线 */
+    background: transparent; /* 去掉之前的灰色背景 */
+}
+
+/* 输入框通用样式 */
+.edit-panel input[type="text"], 
+.settings-panel input[type="text"] {
+    width: 100%;
+    background: #3c3c3c; /* 输入框背景 */
+    border: 1px solid #3c3c3c;
+    color: #cccccc;
+    padding: 8px;
+    font-family: var(--font); /* 保持等宽字体，看起来技术感强 */
+    font-size: 13px;
+    box-sizing: border-box; /* 防止 padding 撑破宽度 */
+    outline: none;
+    margin-bottom: 5px;
+}
+
+/* 输入框聚焦 */
+.edit-panel input:focus, 
+.settings-panel input:focus {
+    border-color: #007acc; /* VS Code 聚焦蓝 */
+}
+
+/* 设置面板里的标签 */
+.setting-item label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #aaaaaa;
+}
+
+/* 路径选择组 (输入框+按钮) */
+.path-input-group {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.path-input-group input {
+    margin-bottom: 0 !important;
+    flex: 1;
+}
+
+/* 按钮组容器 */
+.button-group {
+    display: flex;
+    justify-content: flex-end; /* 按钮靠右放，符合桌面软件习惯 */
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* 所有按钮通用重置 */
+.edit-panel button, 
+.settings-panel button, 
+.theme-panel button {
+    font-family: -apple-system, sans-serif; /* 按钮文字用无衬线体更好读 */
+    padding: 6px 16px;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 2px;
+    border: none;
+}
+
+/* 确定/保存按钮 (蓝色) */
+#save-name-btn, 
+#save-settings-btn, 
+#apply-theme-btn {
+    background: #007acc;
+    color: white;
+}
+#save-name-btn:hover, 
+#save-settings-btn:hover, 
+#apply-theme-btn:hover {
+    background: #0062a3;
+}
+
+/* 取消/普通按钮 (深灰) */
+#cancel-name-btn, 
+#cancel-settings-btn, 
+#cancel-theme-btn,
+#choose-path-btn {
+    background: #3c3c3c;
+    color: white;
+}
+#cancel-name-btn:hover, 
+#cancel-settings-btn:hover, 
+#cancel-theme-btn:hover,
+#choose-path-btn:hover {
+    background: #4b4b4b;
+}
+
+/* 主题列表样式 */
+.theme-list {
+    margin-bottom: 20px;
+}
+.theme-item {
+    padding: 8px;
+    display: flex;
+    align-items: center;
+}
+.theme-item:hover {
+    background: #2a2d2e;
+}
+.theme-item label {
+    margin-left: 8px;
+    cursor: pointer;
 }
