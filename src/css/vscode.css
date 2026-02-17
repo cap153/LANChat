@@ -1,431 +1,53 @@
+/* VSCode 主题 - 示例 */
 :root {
-    /* VS Code Dark / Rust Theme */
-    --bg-root: #1e1e1e;       /* 编辑器背景 */
-    --bg-sidebar: #252526;    /* 侧边栏背景 */
-    --bg-activity: #333333;   /* 活动栏/标题栏 */
-    --bg-terminal: #1e1e1e;   /* 终端背景 */
-    --text-main: #d4d4d4;     /* 主文本 */
-    --text-dim: #858585;      /* 暗淡文本 */
-    
-    /* Rust Syntax Highlighting */
-    --rust-keyword: #569cd6;  /* blue: fn, use, let, pub */
-    --rust-macro: #dcdcaa;    /* yellow: println!, info! */
-    --rust-string: #ce9178;   /* orange: "string" */
-    --rust-comment: #6a9955;  /* green: // comment */
-    --rust-type: #4ec9b0;     /* teal: types */
-    --rust-param: #9cdcfe;    /* light blue: params */
-    
-    --font-code: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    /* VSCode Dark 配色 */
+    --bg-dark: #1e1e1e;
+    --bg-panel: #252526;
+    --bg-light: #2d2d30;
+    --primary: #007acc;
+    --primary-hover: #1177bb;
+    --primary-gradient: linear-gradient(135deg, #007acc 0%, #005a9e 100%);
+    --text-main: #cccccc;
+    --text-dim: #969696;
+    --success: #4ec9b0;
+    --warning: #dcdcaa;
+    --error: #f44747;
+    --radius-lg: 4px;
+    --radius-md: 4px;
+    --radius-pill: 4px;
+    --radius-btn: 4px;
 }
 
-/* 全局重置 */
-* { box-sizing: border-box; }
-
-body {
-    margin: 0;
-    padding: 0;
-    background: var(--bg-root);
-    color: var(--text-main);
-    font-family: var(--font-code);
-    height: 100vh;
-    overflow: hidden; /* 禁止整个页面滚动 */
-    font-size: 14px;
-    line-height: 1.5;
+/* 覆盖按钮样式 */
+button {
+    border-radius: var(--radius-btn) !important;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
 }
 
-/* --- 1. 整体布局骨架 --- */
-.container {
-    display: flex;
-    flex-direction: column; /* 上下布局：标题栏 + 下方主体 */
-    height: 100vh;
-    width: 100vw;
+/* 覆盖输入框样式 */
+input[type="text"], input[type="file"] {
+    border-radius: var(--radius-btn) !important;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
 }
 
-/* 顶部伪装成 VS Code 标题栏 */
-.header {
-    height: 30px;
-    background: var(--bg-activity);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    color: #cccccc;
-    flex-shrink: 0;
-    border-bottom: 1px solid #000;
-}
-.header h1 {
-    font-size: 13px;
-    font-weight: normal;
-    margin: 0;
-}
-/* 隐藏顶部按钮，或者把它们改得很小 */
-.header-buttons { display: none; } 
-
-
-/* 主体区域：左侧资源管理器 + 右侧编辑器 */
-.main-content {
-    display: flex;
-    flex: 1; /* 填满剩余高度 */
-    overflow: hidden; /* 关键：防止内部撑开父容器 */
-    flex-direction: row; /* 左右排列 */
-}
-
-/* --- 2. 左侧侧边栏 (Project Explorer) --- */
-.user-list-container {
-    width: 250px;
-    background: var(--bg-sidebar);
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid #000;
-    flex-shrink: 0;
-    padding-top: 10px;
-}
-
-/* 伪造项目结构标题 */
-.user-list-container::before {
-    content: "V EXPLORER";
-    font-size: 11px;
-    font-weight: bold;
-    padding: 0 20px;
-    margin-bottom: 5px;
-    color: #bbb;
-}
-
-/* 伪造 Cargo 文件树 */
-#user-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    font-family: var(--font-code);
-}
-
-/* 利用 ::before 在列表最上方插入伪文件 */
-#user-list::before {
-    content: "🦀 7900XTX\A    📄 Cargo.lock\A    🦀 Cargo.toml\A    📂 src";
-    white-space: pre; /* 识别 \A 换行 */
-    display: block;
-    color: var(--text-main);
-    padding-left: 10px;
-    line-height: 22px;
-    font-weight: bold;
-}
-
-/* 用户列表项 -> 伪装成 .rs 文件 */
-#user-list li {
-    padding: 2px 0 2px 45px; /* 缩进到 src 下面 */
-    cursor: pointer;
-    color: #999;
-    display: flex;
-    align-items: center;
-    font-size: 13px;
-}
-
-#user-list li:hover {
-    background: #2a2d2e;
-    color: #fff;
-}
-
-#user-list li.active {
-    background: #37373d;
-    color: #fff;
-}
-
-/* 强制添加 .rs 后缀 */
-#user-list li::after {
-    content: ".rs";
-    opacity: 0.7;
-}
-
-/* 隐藏原本的 IP */
-.user-addr { display: none; }
-/* 隐藏原有的呼吸灯/圆点 */
-#user-list li::before { display: none; }
-/* 隐藏可能存在的图标 */
-.user-name { display: inline; }
-
-
-/* --- 3. 右侧编辑器区域 (Chat) --- */
-.chat-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg-root);
-    position: relative;
-    overflow: hidden;
-}
-
-/* 伪装成文件标签页 */
-.chat-header {
-    height: 35px;
-    background: var(--bg-root);
-    display: flex;
-    align-items: center;
-    border-bottom: 1px solid #2b2b2b;
-    padding: 0;
-    flex-shrink: 0;
-}
-
-#chat-with-name {
-    background: #1e1e1e;
-    padding: 8px 15px;
-    border-top: 2px solid var(--rust-string); /* 橙色高亮 */
-    color: #fff;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-}
-#chat-with-name::before {
-    content: "🦀 "; /* Rust logo */
-    margin-right: 5px;
-    font-size: 12px;
-}
-#chat-with-name::after {
-    content: ".rs";
-}
-/* 隐藏关闭按钮 */
-#close-chat-btn { display: none; }
-
-/* 聊天消息列表 -> 代码区 */
-.chat-messages {
-    flex: 1;
-    overflow-y: auto; /* 允许滚动 */
-    padding: 10px 0 10px 10px;
-    font-family: var(--font-code);
-    counter-reset: line 0; /* 行号计数器 */
-    background: var(--bg-root);
-}
-
-/* 顶部固定代码：use tracing... */
-.chat-messages::before {
-    content: "use tracing::{error, info};\A\Afn main() {";
-    white-space: pre;
-    display: block;
-    color: var(--text-main);
-    margin-bottom: 10px;
-    font-size: 14px;
-}
-
-/* 给顶部代码加高亮 (伪装) */
-/* 无法对 content 里的文字单独着色，只能整体设色。
-   为了效果好，我们让它呈现 keyword 颜色，然后 message 里重置 */
-.chat-messages::before {
-    color: var(--rust-keyword); 
-}
-
-/* 底部闭合括号 */
-.chat-messages::after {
-    content: "}";
-    display: block;
-    color: var(--rust-macro); /* 黄色括号 */
-    margin-top: 10px;
-}
-
-/* 每一条消息 -> 一行代码 */
+/* 消息样式 */
 .message {
-    display: flex; /* 让行号和内容横向排列 */
-    align-items: flex-start;
-    padding: 2px 0;
-    margin: 0;
-    width: 100%;
-    /* 移除所有对齐样式，代码都是左对齐的 */
-    justify-content: flex-start !important; 
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+    border-radius: var(--radius-btn) !important;
 }
 
-/* 行号 */
-.message::before {
-    counter-increment: line;
-    content: counter(line);
-    min-width: 30px;
-    text-align: right;
-    margin-right: 15px;
-    color: var(--text-dim);
-    font-size: 12px;
-    user-select: none;
-    border-right: 1px solid #333;
-    padding-right: 10px;
-    line-height: 1.5;
+/* 标题样式 */
+h1, h2 {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
 }
 
-/* 消息内容容器：必须去掉所有气泡样式 */
-.message-content {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    color: var(--rust-string); /* 默认为字符串橙色 */
-    font-family: var(--font-code);
-    font-size: 14px;
-    line-height: 1.5;
-    word-break: break-all;
-    display: flex;
-    flex-wrap: wrap; /* 允许换行，防止撑爆 */
-    align-items: center;
+/* 用户列表项 */
+#user-list li {
+    border-radius: var(--radius-btn) !important;
 }
 
-/* --- 文本消息处理 --- */
-
-/* 接收到的消息： info!("text"); */
-.message.received .message-content::before {
-    content: "    info!(\""; /* 4个空格缩进 */
-    color: var(--rust-macro); /* 黄色 */
-    white-space: pre;
-}
-.message.received .message-content::after {
-    content: "\");";
-    color: var(--text-main);
-}
-
-/* 发送的消息： println!("text"); */
-.message.sent .message-content::before {
-    content: "    println!(\""; 
-    color: var(--rust-macro);
-    white-space: pre;
-}
-.message.sent .message-content::after {
-    content: "\");";
-    color: var(--text-main);
-}
-
-/* --- 文件/图片消息修复 --- */
-/* 必须重置所有原来的文件样式，否则会乱套 */
-
-.message-file {
-    display: inline-flex;
-    align-items: center;
-    margin: 0 5px;
-    background: transparent !important;
-    border: none !important;
-    color: var(--rust-type) !important; /* 蓝绿色 */
-}
-
-/* 隐藏原本的大文件图标 img */
-.message-file img, 
-.file-icon { 
-    display: none !important; 
-}
-
-/* 强制重写文件名为代码风格 */
-.file-name {
-    color: var(--rust-type); /* 类型颜色 */
-    font-family: var(--font-code);
-}
-
-/* 文件状态 -> 注释 */
-.file-status, .file-size {
-    color: var(--rust-comment);
-    font-size: 12px;
-    margin-left: 10px;
-    font-weight: normal;
-}
-/* 给状态加 // 前缀 */
-.file-status::before { content: " // status: "; }
-
-/* 针对包含文件的消息，我们需要修改前缀伪装，
-   让它看起来像 let file = ... 而不是 print("...filehtml...")
-   利用 CSS :has (如果浏览器支持) 或者简单的覆盖 */
-
-/* 简化方案：如果里面有文件，它依然会被包裹在 println!("") 里，
-   但在视觉上我们把引号颜色调成透明，假装它是代码块的一部分。
-   (由于 CSS 无法判断内容是否为纯文本，这里保持 println 格式，
-   把文件看作是一个特殊的 Token) */
-
-/* 时间戳 -> 行尾注释 */
-.message-time {
-    margin-left: 20px;
-    color: var(--rust-comment);
-    font-size: 12px;
-    font-family: var(--font-code);
-}
-.message-time::before {
-    content: "// ";
-}
-
-
-/* --- 4. 底部输入框 -> 终端 (Terminal) --- */
-.chat-input-container {
-    flex-shrink: 0; /* 防止被挤压 */
-    height: 140px;  /* 给终端固定高度 */
-    background: var(--bg-terminal);
-    border-top: 1px solid #444;
-    display: flex;
-    flex-direction: column; /* 垂直排列 */
-    padding: 0;
-}
-
-/* 伪装终端 Tabs */
-.chat-input-container::before {
-    content: "PROBLEMS  OUTPUT  DEBUG CONSOLE  TERMINAL";
-    background: var(--bg-root);
-    color: var(--text-dim);
-    font-size: 11px;
-    padding: 5px 15px;
-    border-bottom: 1px solid #2b2b2b;
-    letter-spacing: 1px;
-}
-/* 伪装终端高亮线 */
-.chat-input-container::after {
-    content: "";
-    height: 1px;
-    width: 60px;
-    background: var(--text-main);
-    position: absolute;
-    bottom: 139px; /* 定位到 TERMINAL 下方 */
-    left: 230px;   /* 估算位置 */
-}
-
-/* 真实的输入区域 wrapper */
-/* 这里我们利用 form 或者 div 的结构 */
-.chat-input-container {
-    padding-top: 10px;
-    padding-left: 10px;
-    position: relative;
-}
-
-/* 提示符 */
-#chat-input {
-    background: transparent;
-    border: none;
-    color: var(--text-main);
-    font-family: var(--font-code);
-    font-size: 14px;
-    outline: none;
-    width: 100%;
-    padding-left: 220px; /* 给提示符留位置 */
-    margin-top: -24px;   /* 把输入框拉上来覆盖提示符 */
-}
-
-/* 使用 ::placeholder 或外部容器制造提示符 */
-/* 由于 input 无法有 ::before，我们利用 input 的父级容器 (chat-input-container) 
-   制造一个绝对定位的提示符 */
-#chat-input-prompt {
-    /* 如果 HTML 里没这个 ID，我们用 CSS 强行造一个视觉层 */
-}
-
-/* 附件按钮 -> 稍微改造下，放最右边或者隐藏 */
-#attach-file-btn {
-    position: absolute;
-    right: 10px;
-    top: 40px;
-    background: transparent;
-    border: none;
-    color: #666;
-    cursor: pointer;
-}
-#attach-file-btn:hover { color: #fff; }
-
-/* 发送按钮 -> 隐藏，极客只用回车 */
-#send-btn { display: none; }
-
-/* 最关键：输入框前面的 Prompt 效果 */
-/* 我们利用 input 本身的 background-image 都不太好做
-   最好的办法是把 input 的 padding-left 设大，然后用父级 background */
-.chat-input-container {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='20'%3E%3Ctext x='5' y='15' font-family='monospace' font-size='12' fill='%2398c379'%3E➜ target/debug %3C/text%3E%3Ctext x='110' y='15' font-family='monospace' font-size='12' fill='%23e06c75'%3Egit:(main) ✗%3C/text%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: 10px 42px; /* 调整位置 */
-}
-
-#chat-input {
-    padding-left: 200px; /* 为背景提示符留白 */
-    margin-top: 5px;
+/* 面板样式 */
+.edit-panel, .settings-panel, .theme-panel {
+    border-radius: var(--radius-md) !important;
+    border: 1px solid #3c3c3c !important;
 }
