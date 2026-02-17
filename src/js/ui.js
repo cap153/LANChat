@@ -53,7 +53,7 @@ function initNameEditor() {
             const updatedName = await apiUpdateMyName(newName);
             
             // 更新显示
-            nameDisplay.textContent = '我是：' + updatedName;
+            nameDisplay.textContent = updatedName;
             editPanel.style.display = 'none';
             
             console.log('[UI] 用户名更新成功:', updatedName);
@@ -479,6 +479,7 @@ async function sendFile(file) {
             }, true);
             
             const result = await apiSendFile(
+                window.currentChatPeer.id,
                 window.currentChatPeer.addr,
                 null  // 桌面端不需要
             );
@@ -528,7 +529,8 @@ async function sendFile(file) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     file_name: file.name,
-                    timestamp: timestamp
+                    timestamp: timestamp,
+                    receiver_id: window.currentChatPeer.id  // 添加接收者ID
                 })
             });
             
@@ -540,6 +542,7 @@ async function sendFile(file) {
             
             console.log('[UI] 3. 开始上传文件到对方');
             const result = await apiSendFile(
+                window.currentChatPeer.id,
                 window.currentChatPeer.addr,
                 file
             );

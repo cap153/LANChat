@@ -159,6 +159,7 @@ async fn init_db_with_path(app_dir: PathBuf) -> Result<Pool<Sqlite>, sqlx::Error
         "CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sender_id TEXT,
+            receiver_id TEXT,
             content TEXT,
             msg_type TEXT,
             timestamp INTEGER,
@@ -168,6 +169,11 @@ async fn init_db_with_path(app_dir: PathBuf) -> Result<Pool<Sqlite>, sqlx::Error
     )
     .execute(&pool)
     .await?;
+
+    // 数据库迁移：为现有的messages表添加receiver_id字段（如果不存在）
+    let _ = sqlx::query("ALTER TABLE messages ADD COLUMN receiver_id TEXT")
+        .execute(&pool)
+        .await; // 忽略错误，因为字段可能已经存在
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS settings (

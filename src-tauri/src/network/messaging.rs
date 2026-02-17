@@ -230,10 +230,14 @@ async fn save_message_to_db(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     message: &TextMessage,
 ) -> Result<(), String> {
+    // 获取当前用户ID作为接收者
+    let my_id = crate::db::get_user_id(pool).await?;
+    
     sqlx::query(
-        "INSERT INTO messages (sender_id, content, msg_type, timestamp) VALUES (?, ?, ?, ?)"
+        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp) VALUES (?, ?, ?, ?, ?)"
     )
-    .bind(&message.from_id)
+    .bind(&message.from_id)  // 发送者ID
+    .bind(&my_id)            // 接收者ID（当前用户）
     .bind(&message.content)
     .bind(&message.msg_type)
     .bind(message.timestamp as i64)
@@ -251,14 +255,27 @@ pub async fn get_chat_history(
     peer_id: &str,
     limit: i32,
 ) -> Result<Vec<serde_json::Value>, String> {
-    // 使用 query_as 直接映射到 Message 结构体
+    // 获取当前用户ID
+    let my_id = crate::db::get_user_id(pool).await?;
+    
+    // 查询双向对话：
+    // 1. 我发送给对方的消息 (sender_id = my_id AND receiver_id = peer_id)
+    // 2. 对方发送给我的消息 (sender_id = peer_id AND (receiver_id = my_id OR receiver_id IS NULL))
+    // 3. 兼容旧数据：sender_id = 'me' 的消息
     let messages = sqlx::query_as::<_, crate::models::Message>(
-        "SELECT id, sender_id, content, msg_type, timestamp, file_path, file_status 
+        "SELECT id, sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status 
          FROM messages 
-         WHERE sender_id = ? OR sender_id = 'me'
+         WHERE 
+            (sender_id = ? AND receiver_id = ?) OR 
+            (sender_id = ? AND (receiver_id = ? OR receiver_id IS NULL)) OR
+            (sender_id = 'me' AND receiver_id = ?)
          ORDER BY timestamp ASC LIMIT ?"
     )
-    .bind(peer_id)
+    .bind(&my_id)        // 我发送的消息
+    .bind(peer_id)       // 发送给对方
+    .bind(peer_id)       // 对方发送的消息
+    .bind(&my_id)        // 发送给我
+    .bind(peer_id)       // 兼容旧数据
     .bind(limit)
     .fetch_all(pool)
     .await

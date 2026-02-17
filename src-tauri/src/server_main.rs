@@ -58,9 +58,9 @@ async fn main() {
 
     // 3. 启动 UDP 广播
     let announce_id = my_id.clone();
-    let announce_name = my_name.clone();
+    let announce_pool = pool.clone();
     tokio::spawn(async move {
-        lanchat::network::discovery::start_announcing(port, announce_id, announce_name).await;
+        lanchat::network::discovery::start_announcing(port, announce_id, announce_pool).await;
     });
 
     println!("[Server Main] ========================================");

@@ -7,15 +7,24 @@ use tauri::{AppHandle, Emitter};
 
 use crate::peers::PeerManager;
 
-// 统一端口广播
-pub async fn start_announcing(port: u16, user_id: String, username: String) {
+// 统一端口广播 - 动态获取用户名
+pub async fn start_announcing(port: u16, user_id: String, pool: sqlx::Pool<sqlx::Sqlite>) {
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap(); // 发送端
     socket.set_broadcast(true).unwrap();
 
-    let msg = format!("LANChat|ONLINE|{}|{}|{}", user_id, username, port);
     let broadcast_addr = format!("255.255.255.255:{}", port);
 
     loop {
+        // 每次广播前从数据库获取最新的用户名
+        let username = match crate::db::get_username(&pool).await {
+            Ok(name) => name,
+            Err(e) => {
+                eprintln!("[UDP] 获取用户名失败: {}", e);
+                "Unknown".to_string()
+            }
+        };
+        
+        let msg = format!("LANChat|ONLINE|{}|{}|{}", user_id, username, port);
         let _ = socket.send_to(msg.as_bytes(), &broadcast_addr);
         tokio::time::sleep(Duration::from_secs(5)).await;
     }
@@ -93,4 +102,20 @@ pub async fn start_listening(port: u16, my_id: String, _my_name: String, peer_ma
             }
         }
     }
+}
+// 发送单次广播（用于改名后立即通知其他用户）
+pub async fn send_single_broadcast(port: u16, user_id: String, username: String) -> Result<(), String> {
+    let socket = UdpSocket::bind("0.0.0.0:0")
+        .map_err(|e| format!("绑定广播socket失败: {}", e))?;
+    socket.set_broadcast(true)
+        .map_err(|e| format!("设置广播模式失败: {}", e))?;
+
+    let msg = format!("LANChat|ONLINE|{}|{}|{}", user_id, username, port);
+    let broadcast_addr = format!("255.255.255.255:{}", port);
+
+    socket.send_to(msg.as_bytes(), &broadcast_addr)
+        .map_err(|e| format!("发送广播失败: {}", e))?;
+    
+    println!("[UDP] 发送单次广播: {} ({})", username, user_id);
+    Ok(())
 }

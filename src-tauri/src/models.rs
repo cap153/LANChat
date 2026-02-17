@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct Message {
     pub id: i64,  // SQLite 的 INTEGER PRIMARY KEY 是 i64
     pub sender_id: String,
+    pub receiver_id: Option<String>,  // 新增接收者ID字段
     pub content: String,
     pub msg_type: String,
     pub timestamp: i64,

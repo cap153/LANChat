@@ -38,6 +38,7 @@ struct ErrorResponse {
 
 #[derive(Deserialize)]
 struct SendMessageRequest {
+    peer_id: String,    // 新增接收者ID
     peer_addr: String,
     content: String,
 }
@@ -178,10 +179,15 @@ async fn update_name_http(
     
     // 使用数据库的更新函数（包含验证逻辑）
     match crate::db::update_username(&state.pool, payload.name.clone()).await {
-        Ok(_) => Json(NameResponse {
-            name: payload.name,
-        })
-        .into_response(),
+        Ok(_) => {
+            // 数据库更新后，定时广播线程会自动使用新名称
+            println!("[Web Server] 用户名已更新，广播线程将使用新名称");
+            
+            Json(NameResponse {
+                name: payload.name,
+            })
+            .into_response()
+        }
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse { error: e }),
@@ -264,8 +270,9 @@ async fn send_message_http(
         .as_secs() as i64;
     
     if let Err(e) = sqlx::query(
-        "INSERT INTO messages (sender_id, content, msg_type, timestamp) VALUES ('me', ?, 'text', ?)"
+        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp) VALUES ('me', ?, ?, 'text', ?)"
     )
+    .bind(&payload.peer_id)   // 接收者ID
     .bind(&payload.content)
     .bind(timestamp)
     .execute(&state.pool)
@@ -428,9 +435,10 @@ async fn upload_file_http(
                     .as_secs() as i64;
                 
                 let result = sqlx::query(
-                    "INSERT INTO messages (sender_id, content, msg_type, timestamp, file_path, file_status) VALUES (?, ?, 'file', ?, '', 'downloading')"
+                    "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES (?, ?, ?, 'file', ?, '', 'downloading')"
                 )
                 .bind(&sender_id)
+                .bind(&crate::db::get_user_id(&state.pool).await.unwrap_or_else(|_| "unknown".to_string()))  // 接收者ID（当前用户）
                 .bind(&file_name)
                 .bind(timestamp)
                 .execute(&state.pool)
@@ -819,6 +827,7 @@ async fn get_download_dir(pool: &Pool<Sqlite>) -> std::path::PathBuf {
 struct CreateUploadRecordRequest {
     file_name: String,
     timestamp: i64,
+    receiver_id: String,  // 新增接收者ID
 }
 
 async fn create_upload_record_http(
@@ -828,8 +837,9 @@ async fn create_upload_record_http(
     println!("[Web Server] 创建上传记录: {}", payload.file_name);
     
     let result = sqlx::query(
-        "INSERT INTO messages (sender_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, 'file', ?, '', 'uploading')"
+        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, ?, 'file', ?, '', 'uploading')"
     )
+    .bind(&payload.receiver_id)  // 接收者ID
     .bind(&payload.file_name)
     .bind(payload.timestamp)
     .execute(&state.pool)

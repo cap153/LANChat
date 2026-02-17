@@ -63,6 +63,9 @@ pub async fn update_my_name(state: State<'_, DbState>, new_name: String) -> Resu
     // 更新数据库
     crate::db::update_username(&state.pool, new_name.clone()).await?;
     
+    // 数据库更新后，定时广播线程会自动使用新名称
+    println!("[Command] 用户名已更新，广播线程将使用新名称");
+    
     // 返回更新后的名字
     Ok(new_name)
 }
@@ -92,8 +95,9 @@ pub async fn send_message(
     
     // 保存到数据库(标记为自己发送的)
     sqlx::query(
-        "INSERT INTO messages (sender_id, content, msg_type, timestamp) VALUES ('me', ?, 'text', ?)"
+        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp) VALUES ('me', ?, ?, 'text', ?)"
     )
+    .bind(&peer_id)  // 接收者ID
     .bind(&content)
     .bind(std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -119,10 +123,11 @@ pub async fn get_chat_history(
 #[tauri::command]
 pub async fn send_file(
     state: State<'_, DbState>,
+    peer_id: String,
     peer_addr: String,
     file_path: String,
 ) -> Result<serde_json::Value, String> {
-    println!("[Command] 收到发送文件请求: {} -> {}", file_path, peer_addr);
+    println!("[Command] 收到发送文件请求: {} -> {} ({})", file_path, peer_addr, peer_id);
     
     // 获取文件名和大小
     let file_name = std::path::Path::new(&file_path)
@@ -144,8 +149,9 @@ pub async fn send_file(
         .as_secs() as i64;
     
     let result = sqlx::query(
-        "INSERT INTO messages (sender_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, 'file', ?, ?, 'uploading')"
+        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, ?, 'file', ?, ?, 'uploading')"
     )
+    .bind(&peer_id)      // 接收者ID
     .bind(&file_name)
     .bind(timestamp)
     .bind(&file_path)

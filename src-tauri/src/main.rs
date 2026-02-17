@@ -65,10 +65,10 @@ fn main() {
                 });
 
                 let id2 = my_id.clone();
-                let name2 = my_name.clone();
+                let pool2 = pool.clone();
                 tokio::spawn(async move {
                     println!("[Main] 开启广播线程...");
-                    lanchat::network::discovery::start_announcing(port, id2, name2).await;
+                    lanchat::network::discovery::start_announcing(port, id2, pool2).await;
                 });
 
                 // 桌面端也启动 HTTP 服务器（用于接收文件和 WebSocket 消息）
