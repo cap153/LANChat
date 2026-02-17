@@ -40,6 +40,10 @@ cargo build --bin lanchat-web --features web --no-default-features
 
 # Release 版本
 cargo build --release --bin lanchat-web --features web --no-default-features
+
+# apk
+export RANLIB=$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib && cargo tauri android build --target aarch64 2>&1 | tail -30
+./sign-apk.sh
 ```
 
 ### 运行

@@ -68,3 +68,11 @@ openssl = { version = "0.10", features = ["vendored"] }
 openssl-sys = { version = "0.9", features = ["vendored"] }
 
 
+
+# Release 优化配置
+[profile.release]
+strip = true          # 移除调试符号
+opt-level = "z"       # 优化体积
+lto = true            # 链接时优化
+codegen-units = 1     # 更好的优化
+panic = "abort"       # 减小体积
