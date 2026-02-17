@@ -43,6 +43,26 @@ identifier = "allow-update-settings"
 description = "Allows updating application settings"
 commands.allow = ["update_settings"]
 
+[[permission]]
+identifier = "allow-get-theme-list"
+description = "Allows getting the list of available themes"
+commands.allow = ["get_theme_list"]
+
+[[permission]]
+identifier = "allow-get-theme-css"
+description = "Allows reading theme CSS content"
+commands.allow = ["get_theme_css"]
+
+[[permission]]
+identifier = "allow-save-current-theme"
+description = "Allows saving the current theme preference"
+commands.allow = ["save_current_theme"]
+
+[[permission]]
+identifier = "allow-get-current-theme"
+description = "Allows reading the current theme preference"
+commands.allow = ["get_current_theme"]
+
 
 [[permission]]
 identifier = "allow-accept-file"

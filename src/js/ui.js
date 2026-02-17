@@ -722,3 +722,166 @@ function initSettings() {
 
 
 
+// 初始化主题功能
+function initTheme() {
+    const themeBtn = document.getElementById('theme-btn');
+    const themePanel = document.getElementById('theme-panel');
+    const applyThemeBtn = document.getElementById('apply-theme-btn');
+    const cancelThemeBtn = document.getElementById('cancel-theme-btn');
+    const themeList = document.getElementById('theme-list');
+    const themeErrorMsg = document.getElementById('theme-error-msg');
+    const themeSuccessMsg = document.getElementById('theme-success-msg');
+    
+    // 打开/关闭主题面板
+    themeBtn.addEventListener('click', async () => {
+        if (themePanel.style.display === 'block') {
+            themePanel.style.display = 'none';
+            themeErrorMsg.textContent = '';
+            themeSuccessMsg.textContent = '';
+            themeSuccessMsg.classList.remove('show');
+        } else {
+            try {
+                await loadThemeList();
+                themePanel.style.display = 'block';
+                themeErrorMsg.textContent = '';
+                themeSuccessMsg.textContent = '';
+                themeSuccessMsg.classList.remove('show');
+            } catch (e) {
+                themeErrorMsg.textContent = '加载主题列表失败: ' + e.message;
+                themePanel.style.display = 'block';
+            }
+        }
+    });
+    
+    // 应用主题
+    applyThemeBtn.addEventListener('click', async () => {
+        const selectedTheme = document.querySelector('input[name="theme"]:checked');
+        if (!selectedTheme) {
+            themeErrorMsg.textContent = '请选择一个主题';
+            return;
+        }
+        
+        try {
+            themeErrorMsg.textContent = '';
+            themeSuccessMsg.textContent = '';
+            themeSuccessMsg.classList.remove('show');
+            
+            await applyTheme(selectedTheme.value);
+            await apiSaveCurrentTheme(selectedTheme.value);
+            
+            themeSuccessMsg.textContent = '✓ 主题应用成功';
+            themeSuccessMsg.classList.add('show');
+            
+            setTimeout(() => {
+                themePanel.style.display = 'none';
+                themeSuccessMsg.classList.remove('show');
+            }, 1500);
+            
+            console.log('[UI] 主题应用成功:', selectedTheme.value);
+        } catch (e) {
+            themeErrorMsg.textContent = '应用主题失败: ' + e.message;
+            console.error('[UI] 应用主题失败:', e);
+        }
+    });
+    
+    // 取消
+    cancelThemeBtn.addEventListener('click', () => {
+        themePanel.style.display = 'none';
+        themeErrorMsg.textContent = '';
+        themeSuccessMsg.textContent = '';
+        themeSuccessMsg.classList.remove('show');
+    });
+    
+    // 页面加载时应用保存的主题
+    loadSavedTheme();
+}
+
+// 加载主题列表
+async function loadThemeList() {
+    const themeList = document.getElementById('theme-list');
+    const themes = await apiGetThemeList();
+    const currentTheme = await apiGetCurrentTheme();
+    
+    themeList.innerHTML = '';
+    
+    for (const theme of themes) {
+        const themeItem = document.createElement('div');
+        themeItem.className = 'theme-item';
+        
+        const isSelected = theme.name === currentTheme;
+        
+        themeItem.innerHTML = `
+            <input type="radio" id="theme-${theme.name}" name="theme" value="${theme.name}" ${isSelected ? 'checked' : ''}>
+            <label for="theme-${theme.name}">${theme.display_name}${theme.is_custom ? ' (自定义)' : ''}</label>
+        `;
+        
+        if (isSelected) {
+            themeItem.classList.add('active');
+        }
+        
+        // 点击整个项目也能选中
+        themeItem.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'INPUT') {
+                const radio = themeItem.querySelector('input[type="radio"]');
+                radio.checked = true;
+                
+                // 更新active状态
+                document.querySelectorAll('.theme-item').forEach(item => item.classList.remove('active'));
+                themeItem.classList.add('active');
+            }
+        });
+        
+        // 监听radio变化
+        const radio = themeItem.querySelector('input[type="radio"]');
+        radio.addEventListener('change', () => {
+            if (radio.checked) {
+                document.querySelectorAll('.theme-item').forEach(item => item.classList.remove('active'));
+                themeItem.classList.add('active');
+            }
+        });
+        
+        themeList.appendChild(themeItem);
+    }
+    
+    console.log('[UI] 加载了', themes.length, '个主题，当前主题:', currentTheme);
+}
+
+// 应用主题
+async function applyTheme(themeName) {
+    // 移除现有的自定义主题样式
+    const existingCustomStyle = document.getElementById('custom-theme-style');
+    if (existingCustomStyle) {
+        existingCustomStyle.remove();
+    }
+    
+    if (themeName === 'default') {
+        console.log('[UI] 应用默认主题');
+        return;
+    }
+    
+    // 获取自定义主题CSS
+    const css = await apiGetThemeCss(themeName);
+    
+    // 创建新的style元素
+    const styleElement = document.createElement('style');
+    styleElement.id = 'custom-theme-style';
+    styleElement.textContent = css;
+    
+    // 添加到head中
+    document.head.appendChild(styleElement);
+    
+    console.log('[UI] 应用自定义主题:', themeName);
+}
+
+// 加载保存的主题
+async function loadSavedTheme() {
+    try {
+        const currentTheme = await apiGetCurrentTheme();
+        if (currentTheme && currentTheme !== 'default') {
+            await applyTheme(currentTheme);
+            console.log('[UI] 自动加载保存的主题:', currentTheme);
+        }
+    } catch (e) {
+        console.warn('[UI] 加载保存的主题失败:', e);
+    }
+}

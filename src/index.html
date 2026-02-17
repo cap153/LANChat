@@ -13,6 +13,7 @@
             <div class="header-buttons">
                 <button id="edit-name-btn">✏️ 改名</button>
                 <button id="settings-btn">⚙️ 设置</button>
+                <button id="theme-btn">🎨 主题</button>
             </div>
         </div>
         
@@ -41,6 +42,24 @@
                 </div>
                 <div id="settings-success-msg" class="success-msg"></div>
                 <div id="settings-error-msg" class="error-msg"></div>
+            </div>
+        </div>
+        
+        <div id="theme-panel" class="theme-panel" style="display: none;">
+            <h2>主题选择</h2>
+            <div class="theme-content">
+                <div class="theme-list" id="theme-list">
+                    <div class="theme-item">
+                        <input type="radio" id="theme-default" name="theme" value="default" checked>
+                        <label for="theme-default">默认主题</label>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button id="apply-theme-btn">应用</button>
+                    <button id="cancel-theme-btn">取消</button>
+                </div>
+                <div id="theme-success-msg" class="success-msg"></div>
+                <div id="theme-error-msg" class="error-msg"></div>
             </div>
         </div>
         

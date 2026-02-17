@@ -57,6 +57,7 @@ rand = "0.8"
 mime_guess = "2.0.5"
 socket2 = { version = "0.5", features = ["all"] }
 directories = "5.0"
+dirs = "5.0"
 reqwest = { version = "0.12", features = ["multipart", "json"] }
 
 

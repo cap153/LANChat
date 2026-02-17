@@ -361,3 +361,68 @@ async function apiSendFile(peerAddr, file) {
         }
     }
 }
+// 主题相关 API
+async function apiGetThemeList() {
+    const tauri = window.__TAURI__;
+    if (tauri) {
+        // 桌面端
+        return await tauri.core.invoke('get_theme_list');
+    } else {
+        // Web 端
+        const response = await fetch('/api/get_theme_list');
+        if (!response.ok) {
+            throw new Error('获取主题列表失败');
+        }
+        return await response.json();
+    }
+}
+
+async function apiGetThemeCss(themeName) {
+    const tauri = window.__TAURI__;
+    if (tauri) {
+        // 桌面端
+        return await tauri.core.invoke('get_theme_css', { themeName });
+    } else {
+        // Web 端
+        const response = await fetch(`/api/get_theme_css/${themeName}`);
+        if (!response.ok) {
+            throw new Error('获取主题CSS失败');
+        }
+        return await response.text();
+    }
+}
+
+async function apiSaveCurrentTheme(themeName) {
+    const tauri = window.__TAURI__;
+    if (tauri) {
+        // 桌面端
+        return await tauri.core.invoke('save_current_theme', { themeName });
+    } else {
+        // Web 端
+        const response = await fetch('/api/save_current_theme', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ theme_name: themeName })
+        });
+        if (!response.ok) {
+            throw new Error('保存主题失败');
+        }
+        return await response.json();
+    }
+}
+
+async function apiGetCurrentTheme() {
+    const tauri = window.__TAURI__;
+    if (tauri) {
+        // 桌面端
+        return await tauri.core.invoke('get_current_theme');
+    } else {
+        // Web 端
+        const response = await fetch('/api/get_current_theme');
+        if (!response.ok) {
+            throw new Error('获取当前主题失败');
+        }
+        const result = await response.json();
+        return result.theme;
+    }
+}

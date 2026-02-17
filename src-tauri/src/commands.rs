@@ -272,3 +272,97 @@ pub async fn send_file(
     }))
 }
 
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn get_theme_list() -> Result<Vec<serde_json::Value>, String> {
+    println!("[Command] 收到前端请求: get_theme_list");
+    
+    let mut themes = vec![
+        serde_json::json!({
+            "name": "default",
+            "display_name": "默认主题",
+            "is_custom": false
+        })
+    ];
+    
+    // 检查自定义主题目录
+    let home_dir = dirs::home_dir().ok_or("无法获取用户主目录")?;
+    let theme_dir = home_dir.join(".config").join("lanchat");
+    
+    if theme_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&theme_dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("css") {
+                        if let Some(file_name) = path.file_stem().and_then(|s| s.to_str()) {
+                            themes.push(serde_json::json!({
+                                "name": file_name,
+                                "display_name": file_name,
+                                "is_custom": true,
+                                "path": path.to_string_lossy()
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    println!("[Command] 找到 {} 个主题", themes.len());
+    Ok(themes)
+}
+
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn get_theme_css(theme_name: String) -> Result<String, String> {
+    println!("[Command] 收到前端请求: get_theme_css, 主题: {}", theme_name);
+    
+    if theme_name == "default" {
+        return Ok(String::new()); // 默认主题返回空字符串
+    }
+    
+    let home_dir = dirs::home_dir().ok_or("无法获取用户主目录")?;
+    let theme_path = home_dir.join(".config").join("lanchat").join(format!("{}.css", theme_name));
+    
+    if !theme_path.exists() {
+        return Err(format!("主题文件不存在: {}", theme_path.display()));
+    }
+    
+    let css_content = std::fs::read_to_string(&theme_path)
+        .map_err(|e| format!("读取主题文件失败: {}", e))?;
+    
+    println!("[Command] 成功读取主题文件: {} ({} 字节)", theme_path.display(), css_content.len());
+    Ok(css_content)
+}
+
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn save_current_theme(state: State<'_, DbState>, theme_name: String) -> Result<(), String> {
+    println!("[Command] 收到前端请求: save_current_theme, 主题: {}", theme_name);
+    
+    // 保存当前主题到数据库
+    sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('current_theme', ?)")
+        .bind(&theme_name)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| format!("保存主题设置失败: {}", e))?;
+    
+    println!("[Command] 主题设置已保存: {}", theme_name);
+    Ok(())
+}
+
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn get_current_theme(state: State<'_, DbState>) -> Result<String, String> {
+    println!("[Command] 收到前端请求: get_current_theme");
+    
+    let result = sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = 'current_theme'")
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| format!("查询主题设置失败: {}", e))?;
+    
+    let theme = result.unwrap_or_else(|| "default".to_string());
+    println!("[Command] 当前主题: {}", theme);
+    Ok(theme)
+}

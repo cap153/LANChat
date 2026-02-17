@@ -21,7 +21,11 @@ fn main() {
             lanchat::commands::get_chat_history,
             lanchat::commands::send_file,
             lanchat::commands::get_settings,
-            lanchat::commands::update_settings
+            lanchat::commands::update_settings,
+            lanchat::commands::get_theme_list,
+            lanchat::commands::get_theme_css,
+            lanchat::commands::save_current_theme,
+            lanchat::commands::get_current_theme
         ])
         // --------------------------
         .setup(|app| {

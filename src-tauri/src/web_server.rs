@@ -90,6 +90,10 @@ pub async fn start_server(
         .route("/api/create_upload_record", post(create_upload_record_http))
         .route("/api/update_upload_status", post(update_upload_status_http))
         .route("/api/delete_upload_record", post(delete_upload_record_http))
+        .route("/api/get_theme_list", get(get_theme_list_http))
+        .route("/api/get_theme_css/:theme_name", get(get_theme_css_http))
+        .route("/api/save_current_theme", post(save_current_theme_http))
+        .route("/api/get_current_theme", get(get_current_theme_http))
         .route("/ws", get(websocket_handler))
         .layer(cors)
         .layer(axum::extract::DefaultBodyLimit::disable())  // 无限制
@@ -920,3 +924,138 @@ async fn delete_upload_record_http(
     }
 }
 
+// 主题相关的 HTTP 处理函数
+async fn get_theme_list_http() -> impl IntoResponse {
+    println!("[Web Server] 收到获取主题列表请求");
+    
+    let mut themes = vec![
+        serde_json::json!({
+            "name": "default",
+            "display_name": "默认主题",
+            "is_custom": false
+        })
+    ];
+    
+    // 检查自定义主题目录
+    if let Some(home_dir) = dirs::home_dir() {
+        let theme_dir = home_dir.join(".config").join("lanchat");
+        
+        if theme_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&theme_dir) {
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        let path = entry.path();
+                        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("css") {
+                            if let Some(file_name) = path.file_stem().and_then(|s| s.to_str()) {
+                                themes.push(serde_json::json!({
+                                    "name": file_name,
+                                    "display_name": file_name,
+                                    "is_custom": true,
+                                    "path": path.to_string_lossy()
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    println!("[Web Server] 找到 {} 个主题", themes.len());
+    Json(themes).into_response()
+}
+
+async fn get_theme_css_http(Path(theme_name): Path<String>) -> impl IntoResponse {
+    println!("[Web Server] 收到获取主题CSS请求: {}", theme_name);
+    
+    if theme_name == "default" {
+        return Response::builder()
+            .header(header::CONTENT_TYPE, "text/css")
+            .body(Body::from(""))
+            .unwrap()
+            .into_response();
+    }
+    
+    if let Some(home_dir) = dirs::home_dir() {
+        let theme_path = home_dir.join(".config").join("lanchat").join(format!("{}.css", theme_name));
+        
+        if theme_path.exists() {
+            match std::fs::read_to_string(&theme_path) {
+                Ok(css_content) => {
+                    println!("[Web Server] 成功读取主题文件: {} ({} 字节)", theme_path.display(), css_content.len());
+                    return Response::builder()
+                        .header(header::CONTENT_TYPE, "text/css")
+                        .body(Body::from(css_content))
+                        .unwrap()
+                        .into_response();
+                }
+                Err(e) => {
+                    eprintln!("[Web Server] 读取主题文件失败: {}", e);
+                }
+            }
+        }
+    }
+    
+    (
+        StatusCode::NOT_FOUND,
+        Json(ErrorResponse {
+            error: format!("主题文件不存在: {}", theme_name),
+        }),
+    ).into_response()
+}
+
+#[derive(Deserialize)]
+struct SaveThemeRequest {
+    theme_name: String,
+}
+
+async fn save_current_theme_http(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<SaveThemeRequest>,
+) -> impl IntoResponse {
+    println!("[Web Server] 收到保存主题请求: {}", req.theme_name);
+    
+    match sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('current_theme', ?)")
+        .bind(&req.theme_name)
+        .execute(&state.pool)
+        .await
+    {
+        Ok(_) => {
+            println!("[Web Server] 主题设置已保存: {}", req.theme_name);
+            Json(serde_json::json!({"success": true})).into_response()
+        }
+        Err(e) => {
+            eprintln!("[Web Server] 保存主题设置失败: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("保存主题设置失败: {}", e),
+                }),
+            ).into_response()
+        }
+    }
+}
+
+async fn get_current_theme_http(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    println!("[Web Server] 收到获取当前主题请求");
+    
+    match sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = 'current_theme'")
+        .fetch_optional(&state.pool)
+        .await
+    {
+        Ok(result) => {
+            let theme = result.unwrap_or_else(|| "default".to_string());
+            println!("[Web Server] 当前主题: {}", theme);
+            Json(serde_json::json!({"theme": theme})).into_response()
+        }
+        Err(e) => {
+            eprintln!("[Web Server] 查询主题设置失败: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("查询主题设置失败: {}", e),
+                }),
+            ).into_response()
+        }
+    }
+}

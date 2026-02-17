@@ -514,7 +514,7 @@ h1 {
 }
 
 /* --- 弹窗 (设置/改名) --- */
-.edit-panel, .settings-panel {
+.edit-panel, .settings-panel, .theme-panel {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -536,7 +536,7 @@ h1 {
     to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-.settings-panel h2, .edit-panel h2 {
+.settings-panel h2, .edit-panel h2, .theme-panel h2 {
     margin-top: 0;
     color: var(--primary);
     font-size: 20px;
@@ -688,4 +688,41 @@ h1 {
     #attach-file-btn { width: 36px; height: 36px; font-size: 18px; }
     #chat-input { padding: 10px 12px; font-size: 14px; }
     #send-btn { padding: 8px 16px; font-size: 14px; }
+}
+
+/* 主题选择面板 */
+.theme-list {
+    margin-bottom: 20px;
+}
+
+.theme-item {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.theme-item:hover {
+    background: rgba(189, 147, 249, 0.1);
+    border-color: var(--primary);
+}
+
+.theme-item input[type="radio"] {
+    margin-right: 12px;
+    accent-color: var(--primary);
+}
+
+.theme-item label {
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.theme-item.active {
+    background: rgba(189, 147, 249, 0.2);
+    border: 1px solid var(--primary);
 }

@@ -23,6 +23,10 @@
     "allow-send-file",
     "allow-get-settings",
     "allow-update-settings",
+    "allow-get-theme-list",
+    "allow-get-theme-css",
+    "allow-save-current-theme",
+    "allow-get-current-theme",
     "allow-accept-file"
   ]
 }
