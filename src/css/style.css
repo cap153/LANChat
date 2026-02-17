@@ -567,6 +567,13 @@ h1 {
     outline: none;
 }
 
+.setting-item label {
+    display: block;
+    color: var(--text-main);
+    font-weight: 600;
+    margin-bottom: 8px; /* 标签和输入框之间的间距 */
+}
+
 /* [修复1] 路径选择区域：防止拉伸和错位 */
 .path-input-group {
     display: flex;
@@ -605,7 +612,7 @@ h1 {
     gap: 12px;
 }
 
-#save-name-btn, #save-settings-btn {
+#save-name-btn, #save-settings-btn, #apply-theme-btn {
     flex: 1;
     background: var(--primary-gradient);
     color: white;
@@ -617,7 +624,7 @@ h1 {
     transition: 0.3s;
 }
 
-#cancel-name-btn, #cancel-settings-btn {
+#cancel-name-btn, #cancel-settings-btn, #cancel-theme-btn {
     flex: 1;
     background: transparent;
     border: 1px solid rgba(255,255,255,0.1);
@@ -628,7 +635,7 @@ h1 {
     font-weight: 600;
 }
 
-#cancel-name-btn:hover, #cancel-settings-btn:hover {
+#cancel-name-btn:hover, #cancel-settings-btn:hover, #cancel-theme-btn:hover {
     background: rgba(255,255,255,0.05);
     color: #fff;
 }
