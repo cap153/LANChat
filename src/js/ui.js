@@ -328,72 +328,80 @@ async function sendMessage() {
 
 // 添加消息到聊天窗口
 function addMessageToChat(message, isSent) {
-	console.log('[UI] addMessageToChat 被调用');
-	console.log('[UI] 消息类型:', message.msg_type);
-	console.log('[UI] 是否发送:', isSent);
+    const chatMessages = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
 
-	const chatMessages = document.getElementById('chat-messages');
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
 
-	const messageDiv = document.createElement('div');
-	messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+    if (message.msg_type === 'file') {
+        const fileContainer = document.createElement('div');
+        fileContainer.className = 'message-file';
 
-	const contentDiv = document.createElement('div');
-	contentDiv.className = 'message-content';
+        // 1. 图标 (默认主题需要，伪装模式会隐藏)
+        const fileIcon = document.createElement('span');
+        fileIcon.className = 'file-icon';
+        fileIcon.textContent = '📄';
 
-	// 检查是否是文件消息
-	if (message.msg_type === 'file') {
-		console.log('[UI] 渲染文件消息:', message.file_name || message.content);
-		console.log('[UI] 文件状态:', message.file_status);
+        // 2. 文件信息包装层 (为了方便默认主题垂直布局)
+        const fileInfo = document.createElement('div');
+        fileInfo.className = 'file-info';
 
-		const fileDiv = document.createElement('div');
-		fileDiv.className = 'message-file';
+        // 文件名
+        const fileName = document.createElement('div');
+        fileName.className = 'file-name';
+        fileName.textContent = message.file_name || message.content;
 
-		const fileStatus = message.file_status || 'accepted';
-		const isPending = fileStatus === 'pending';
-		const isAccepted = fileStatus === 'accepted';
-		const isDownloading = fileStatus === 'downloading';
-		const isUploading = fileStatus === 'uploading';
+        // 文件大小 (找回消失的它！)
+        const fileSize = document.createElement('div');
+        fileSize.className = 'file-size';
+        fileSize.textContent = message.file_size ? formatFileSize(message.file_size) : '未知大小';
 
-		fileDiv.innerHTML = `
-            <div class="file-info">
-                <span class="file-icon">📄</span>
-                <div>
-                    <div class="file-name">${message.file_name || message.content}</div>
-                    <div class="file-size">${message.file_size ? formatFileSize(message.file_size) : '未知大小'}</div>
-                    ${isAccepted && !isSent ? '<div class="file-finish">finish</div>' : ''}
-                    ${isDownloading ? '<div class="file-downloading">下载中...</div>' : ''}
-                    ${isUploading ? '<div class="file-uploading">上传中...</div>' : ''}
-                </div>
-            </div>
-        `;
+        fileInfo.appendChild(fileName);
+        fileInfo.appendChild(fileSize);
+        
+        fileContainer.appendChild(fileIcon);
+        fileContainer.appendChild(fileInfo);
+        contentDiv.appendChild(fileContainer);
 
-		// 如果是接收的文件且已完成，可以点击下载
-		if (!isSent && message.file_id && isAccepted) {
-			fileDiv.style.cursor = 'pointer';
-			fileDiv.addEventListener('click', () => {
-				downloadFile(message.file_id, message.file_name || message.content);
-			});
-		}
+        // 3. 状态标签 (保留类名，供默认模式显示圆点，伪装模式显示注释)
+        const fileStatus = message.file_status || 'accepted';
+        const statusDiv = document.createElement('div');
+        if (fileStatus === 'downloading') {
+            statusDiv.className = 'file-downloading';
+            statusDiv.textContent = '下载中...';
+        } else if (fileStatus === 'uploading') {
+            statusDiv.className = 'file-uploading';
+            statusDiv.textContent = '上传中...';
+        } else if (fileStatus === 'accepted' && !isSent) {
+            statusDiv.className = 'file-finish';
+            statusDiv.textContent = 'finish';
+        }
 
-		contentDiv.appendChild(fileDiv);
-	} else {
-		// 文本消息
-		console.log('[UI] 渲染文本消息:', message.content);
-		contentDiv.textContent = message.content;
-	}
+        if (statusDiv.className) {
+            contentDiv.appendChild(statusDiv);
+        }
 
-	const timeDiv = document.createElement('div');
-	timeDiv.className = 'message-time';
-	const date = new Date(message.timestamp * 1000);
-	timeDiv.textContent = date.toLocaleTimeString();
+        if (!isSent && message.file_id && fileStatus === 'accepted') {
+            fileContainer.style.cursor = 'pointer';
+            fileContainer.addEventListener('click', () => downloadFile(message.file_id, message.file_name || message.content));
+        }
+    } else {
+        const textSpan = document.createElement('span');
+        textSpan.className = 'message-text';
+        textSpan.textContent = message.content;
+        contentDiv.appendChild(textSpan);
+    }
 
-	messageDiv.appendChild(contentDiv);
-	messageDiv.appendChild(timeDiv);
-	chatMessages.appendChild(messageDiv);
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'message-time';
+    const date = new Date(message.timestamp * 1000);
+    timeDiv.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-	// 注意：不在这里自动滚动，由调用者决定是否滚动
-
-	console.log('[UI] 消息已添加到聊天窗口');
+    messageDiv.appendChild(contentDiv);
+    messageDiv.appendChild(timeDiv);
+    chatMessages.appendChild(messageDiv);
 }
 
 // 加载聊天历史

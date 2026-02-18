@@ -251,16 +251,19 @@ h2::before {
 	/* 紫色光晕 */
 }
 
-/* 选中时的左侧指示条（可选，如果不想要可以去掉） */
+/* 修复紫色指示条：不再贴死边缘 */
 #user-list li.active::before {
 	content: '';
 	position: absolute;
 	left: 0;
-	top: 0;
-	bottom: 0;
+	top: 20%;
+	/* 上下留空，不占满高度更精致 */
+	bottom: 20%;
 	width: 4px;
-	background: var(--primary);
-	box-shadow: 0 0 10px var(--primary);
+	background: #bd93f9;
+	border-radius: 0 4px 4px 0;
+	/* 右侧圆角 */
+	box-shadow: 2px 0 10px rgba(189, 147, 249, 0.6);
 }
 
 /* 文字颜色优化 */
@@ -279,6 +282,7 @@ h2::before {
 	font-family: 'JetBrains Mono', Consolas, monospace;
 	/* 如果有等宽字体，显示IP更好看 */
 	letter-spacing: 0.5px;
+	margin-left: 5px;
 }
 
 /* 选中时文字变色 */
