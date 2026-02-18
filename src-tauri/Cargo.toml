@@ -29,7 +29,7 @@ tauri-build = { version = "2.0", features = [], optional = true }
 
 [dependencies]
 # 核心 - 仅桌面端需要
-tauri = { version = "2.0", features = [], optional = true }
+tauri = { version = "2.0", features = ["tray-icon"], optional = true }
 tauri-plugin-shell = { version = "2.0", optional = true }
 tauri-plugin-fs = { version = "2.0", optional = true }
 tauri-plugin-dialog = { version = "2.0", optional = true }

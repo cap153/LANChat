@@ -1,9 +1,10 @@
 // src/main.rs
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use lanchat_lib::db;
 use lanchat_lib::peers::PeerManager;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Manager, menu::{Menu, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent}};
 
 fn main() {
     tauri::Builder::default()
@@ -34,6 +35,57 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
             let port = 8888;
+
+            // 获取主窗口并设置关闭事件处理
+            if let Some(window) = app.get_webview_window("main") {
+                let window_clone = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        // 阻止默认关闭行为
+                        api.prevent_close();
+                        // 隐藏窗口而不是关闭
+                        let _ = window_clone.hide();
+                    }
+                });
+            }
+
+            // 创建托盘菜单
+            let show_item = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+            // 创建托盘图标
+            let _tray = TrayIconBuilder::new()
+                .menu(&menu)
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("LANChat")
+                .on_menu_event(move |app, event| {
+                    match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button, button_state, .. } = event {
+                        if button == tauri::tray::MouseButton::Left 
+                            && button_state == tauri::tray::MouseButtonState::Up {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    }
+                })
+                .build(app)?;
 
             tauri::async_runtime::block_on(async move {
                 println!("[Main] 正在初始化数据库...");
