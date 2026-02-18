@@ -1,3 +1,5 @@
+<img width="1923" height="2104" alt="image" src="https://github.com/user-attachments/assets/454c170a-272a-4997-b096-569fc7c4dc53" />
+
 # LANChat
 
 一个跨平台的、无需注册的、支持文件传输的局域网聊天软件。
