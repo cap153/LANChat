@@ -94,7 +94,8 @@ cargo build --release --bin lanchat-web --features web --no-default-features
 - [x] Android 端适配
 - [x] 文本消息传输
 - [x] 文件传输功能
-- [x] Windows 端测试
+- [x] Windows 端适配
+- [x] 单实例锁定功能
 
 ### 🚧 进行中
 - [ ] 删除历史聊天记录
