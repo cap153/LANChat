@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# export RANLIB=$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib && cargo tauri android build --target aarch64 2>&1 | tail -30
+#
 # APK 签名脚本
 
 KEYSTORE="lanchat-release.keystore"

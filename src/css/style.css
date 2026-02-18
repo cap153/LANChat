@@ -471,6 +471,22 @@ h2::before {
 	margin-left: 4px;
 }
 
+/* 1. 文件名换行核心手术 */
+.file-name {
+	word-break: break-all;
+	/* 强制截断长字符串 */
+	overflow-wrap: anywhere;
+	/* 兼容现代浏览器的换行方案 */
+	white-space: normal;
+	/* 确保允许换行 */
+	line-height: 1.4;
+	/* 换行后增加行间距，不显得拥挤 */
+	font-size: 14px;
+	font-weight: 500;
+	color: #f8f8f2;
+	margin-bottom: 4px;
+}
+
 /* --- 文件状态通用样式 --- */
 .file-status,
 .file-finish,
@@ -554,6 +570,12 @@ h2::before {
 .file-info {
 	align-items: flex-start;
 	/* 强制左对齐 */
+	flex: 1;
+	/* 占满剩余宽度 */
+	min-width: 0;
+	/* 极其重要！没有这个文件名就无法换行 */
+	display: flex;
+	flex-direction: column;
 }
 
 /* 调整文件大小的颜色，让它退居次要位置，凸显状态 */
@@ -670,25 +692,17 @@ h2::before {
 
 /* 悬停效果：变实心紫 + 发光 */
 #send-btn:hover:not(:disabled) {
-	background: var(--primary);
-	/* 背景变实心紫 */
-	color: #282a36;
-	/* 文字变深色 (Dracula背景色) 对比度更高 */
-	/* 或者如果你喜欢白字，可以用 color: #fff; */
-	border-color: var(--primary);
+	background: var(--primary) !important;
+	color: #282a36 !important;
+	/* 变成深色背景上的深色字，对比度更高 */
 	box-shadow: 0 0 15px rgba(189, 147, 249, 0.5);
-	/* 紫色光晕 */
-	transform: translateY(-2px);
 }
 
 /* 禁用状态 */
 #send-btn:disabled {
-	background: rgba(255, 255, 255, 0.05);
-	color: var(--text-dim);
-	border-color: rgba(255, 255, 255, 0.1);
+	opacity: 0.5;
 	cursor: not-allowed;
-	transform: none;
-	box-shadow: none;
+	flex-shrink: 0;
 }
 
 /* --- 弹窗 (设置/改名) --- */
@@ -710,6 +724,7 @@ h2::before {
 	box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 	z-index: 1000;
 	animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+	font-family: sans-serif !important;
 }
 
 @keyframes popIn {
@@ -789,17 +804,26 @@ h2::before {
 /* 选择按钮：固定高度，不被 Flex 拉伸 */
 #choose-path-btn {
 	height: 44px;
-	/* 与输入框视觉高度一致 */
-	background: rgba(98, 114, 164, 0.2);
-	color: var(--primary);
-	border: 1px solid rgba(189, 147, 249, 0.3);
 	padding: 0 20px;
+	background: rgba(98, 114, 164, 0.2);
+	color: var(--primary) !important;
+	/* 强制使用紫色 */
+	border: 1px solid rgba(189, 147, 249, 0.3);
 	border-radius: 8px;
 	cursor: pointer;
 	font-weight: 600;
 	transition: 0.3s;
-	white-space: nowrap;
-	/* 防止文字换行 */
+
+	/* 核心修复：防止在 Linux 下被挤压 */
+	flex-shrink: 0 !important;
+	/* 禁止缩小 */
+	min-width: fit-content !important;
+	/* 保证宽度能装下文字 */
+	white-space: nowrap !important;
+	/* 禁止换行 */
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 #choose-path-btn:hover {
@@ -816,27 +840,42 @@ h2::before {
 #save-settings-btn,
 #apply-theme-btn {
 	flex: 1;
-	background: var(--primary-gradient);
-	color: white;
+	background: var(--primary-gradient) !important;
+	color: #ffffff !important;
+	/* 强制白色，不使用变量 */
 	border: none;
 	padding: 12px;
 	border-radius: 8px;
 	font-weight: bold;
 	cursor: pointer;
-	transition: 0.3s;
+
+	/* 确保文字居中可见 */
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	min-height: 44px;
 }
 
 #cancel-name-btn,
 #cancel-settings-btn,
 #cancel-theme-btn {
 	flex: 1;
-	background: transparent;
+	background: rgba(255, 255, 255, 0.05) !important;
+	/* 给予一个微弱的背景色防止全透明 */
 	border: 1px solid rgba(255, 255, 255, 0.1);
-	color: var(--text-dim);
+	color: #b3b3b3 !important;
+	/* 强制灰色 */
 	padding: 12px;
 	border-radius: 8px;
 	cursor: pointer;
 	font-weight: 600;
+
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	min-height: 44px;
 }
 
 #cancel-name-btn:hover,
@@ -958,13 +997,31 @@ h2::before {
 	}
 
 	#send-btn {
-		flex-shrink: 0;
-		/* 关键：禁止按钮被挤压 */
-		width: auto;
-		/* 宽度自适应内容 */
-		padding: 8px 16px;
-		white-space: nowrap;
-		/* 防止文字换行 */
+		/* 1. 核心修复：禁止被输入框挤压 */
+		flex-shrink: 0 !important;
+		min-width: 80px !important;
+		/* 给“发送”两个字留够最小宽度 */
+		white-space: nowrap !important;
+		/* 禁止文字换行 */
+
+		/* 2. 布局修复：确保文字在任何系统下都居中 */
+		display: flex !important;
+		align-items: center;
+		justify-content: center;
+
+		/* 3. 视觉修复：强制文字颜色，防止继承错误 */
+		color: var(--primary) !important;
+		background: rgba(98, 114, 164, 0.2);
+		border: 1px solid rgba(189, 147, 249, 0.3);
+
+		/* 4. 尺寸与间距 */
+		height: 42px;
+		/* 保持固定高度 */
+		padding: 0 20px !important;
+		border-radius: var(--radius-btn);
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.3s;
 	}
 }
 

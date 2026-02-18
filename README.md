@@ -31,16 +31,20 @@
 
 ```bash
 # 桌面端
+cargo tauri build --bundles deb
+cargo tauri build --bundles rpm
+
+# apk
+cargo tauri android build --target aarch64
+./sign-apk.sh
+
+# windows桌面端
 cd src-tauri
-cargo build --bin lanchat --features desktop
+cargo xwin build --release --bin lanchat --target x86_64-pc-windows-msvc
 
 # Web 端（精简版，无 GUI 依赖）
 cd src-tauri
 cargo build --release --bin lanchat-web --features web --no-default-features
-
-# apk
-export RANLIB=$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib && cargo tauri android build --target aarch64 2>&1 | tail -30
-./sign-apk.sh
 ```
 
 ### 运行
@@ -120,36 +124,14 @@ LANChat/
 ### 📋 计划中
 - [ ] 文件重新下载
 
-## 开发
+## 运行
 
-### 测试 Web API
+1. 在服务器上运行:
 ```bash
-# 启动 Web 服务器
-./start-web.sh
-
-# 在另一个终端运行测试
-./test-web-api.sh
+lanchat-web --port 8888
 ```
 
-### 快速部署到服务器
-
-1. 编译 Release 版本:
-```bash
-cd src-tauri
-cargo build --release --bin lanchat-web
-```
-
-2. 复制到服务器:
-```bash
-scp target/release/lanchat-web user@server:/path/to/deploy/
-```
-
-3. 在服务器上运行:
-```bash
-./lanchat-web --port 8888
-```
-
-4. 配置防火墙:
+2. 配置防火墙:
 ```bash
 sudo ufw allow 8888/tcp
 sudo ufw allow 8888/udp
