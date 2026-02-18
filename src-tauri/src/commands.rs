@@ -317,7 +317,14 @@ pub async fn get_theme_list() -> Result<Vec<serde_json::Value>, String> {
         serde_json::json!({
             "name": "default",
             "display_name": "默认主题",
-            "is_custom": false
+            "is_custom": false,
+            "is_builtin": true
+        }),
+        serde_json::json!({
+            "name": "vscode",
+            "display_name": "VSCode 主题",
+            "is_custom": false,
+            "is_builtin": true
         })
     ];
     
@@ -336,6 +343,7 @@ pub async fn get_theme_list() -> Result<Vec<serde_json::Value>, String> {
                                 "name": file_name,
                                 "display_name": file_name,
                                 "is_custom": true,
+                                "is_builtin": false,
                                 "path": path.to_string_lossy()
                             }));
                         }
@@ -357,6 +365,15 @@ pub async fn get_theme_css(theme_name: String) -> Result<String, String> {
         return Ok(String::new()); // 默认主题返回空字符串
     }
     
+    // 检查是否是内置主题
+    if theme_name == "vscode" {
+        // 从嵌入的资源中读取 vscode.css
+        let css_content = include_str!("../../src/css/vscode.css");
+        println!("[Command] 加载内置主题: vscode ({} 字节)", css_content.len());
+        return Ok(css_content.to_string());
+    }
+    
+    // 自定义主题从用户目录读取
     let home_dir = dirs::home_dir().ok_or("无法获取用户主目录")?;
     let theme_path = home_dir.join(".config").join("lanchat").join(format!("{}.css", theme_name));
     
