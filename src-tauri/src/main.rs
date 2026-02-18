@@ -1,7 +1,7 @@
 // src/main.rs
 
-use lanchat::db;
-use lanchat::peers::PeerManager;
+use lanchat_lib::db;
+use lanchat_lib::peers::PeerManager;
 use std::sync::Arc;
 use tauri::Manager;
 
@@ -13,22 +13,22 @@ fn main() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         // --- 重点：添加下面这段代码 ---
         .invoke_handler(tauri::generate_handler![
-            lanchat::commands::get_my_name,
-            lanchat::commands::get_my_id,
-            lanchat::commands::update_my_name,
-            lanchat::commands::get_peers,
-            lanchat::commands::send_message,
-            lanchat::commands::get_chat_history,
-            lanchat::commands::send_file,
-            lanchat::commands::get_settings,
-            lanchat::commands::update_settings,
-            lanchat::commands::get_theme_list,
-            lanchat::commands::get_theme_css,
-            lanchat::commands::save_current_theme,
-            lanchat::commands::get_current_theme,
-            lanchat::commands::get_default_download_path,
-            lanchat::commands::request_storage_permission,
-            lanchat::commands::save_file_message
+            lanchat_lib::commands::get_my_name,
+            lanchat_lib::commands::get_my_id,
+            lanchat_lib::commands::update_my_name,
+            lanchat_lib::commands::get_peers,
+            lanchat_lib::commands::send_message,
+            lanchat_lib::commands::get_chat_history,
+            lanchat_lib::commands::send_file,
+            lanchat_lib::commands::get_settings,
+            lanchat_lib::commands::update_settings,
+            lanchat_lib::commands::get_theme_list,
+            lanchat_lib::commands::get_theme_css,
+            lanchat_lib::commands::save_current_theme,
+            lanchat_lib::commands::get_current_theme,
+            lanchat_lib::commands::get_default_download_path,
+            lanchat_lib::commands::request_storage_permission,
+            lanchat_lib::commands::save_file_message
         ])
         // --------------------------
         .setup(|app| {
@@ -54,7 +54,7 @@ fn main() {
                 let peer_manager = Arc::new(PeerManager::new());
                 
                 // 将 PeerManager 注册到 Tauri 状态管理
-                handle.manage(lanchat::commands::PeerState {
+                handle.manage(lanchat_lib::commands::PeerState {
                     manager: peer_manager.clone(),
                 });
 
@@ -64,14 +64,14 @@ fn main() {
                 let peer_manager_clone = peer_manager.clone();
                 tokio::spawn(async move {
                     println!("[Main] 开启监听线程...");
-                    lanchat::network::discovery::start_listening(port, id1, name1, Some(h1), peer_manager_clone).await;
+                    lanchat_lib::network::discovery::start_listening(port, id1, name1, Some(h1), peer_manager_clone).await;
                 });
 
                 let id2 = my_id.clone();
                 let pool2 = pool.clone();
                 tokio::spawn(async move {
                     println!("[Main] 开启广播线程...");
-                    lanchat::network::discovery::start_announcing(port, id2, pool2).await;
+                    lanchat_lib::network::discovery::start_announcing(port, id2, pool2).await;
                 });
 
                 // 桌面端也启动 HTTP 服务器（用于接收文件和 WebSocket 消息）
@@ -80,7 +80,7 @@ fn main() {
                 let handle_clone = handle.clone();
                 tokio::spawn(async move {
                     println!("[Main] 启动 HTTP 服务器在端口 {}...", port);
-                    lanchat::web_server::start_server(port, port, pool_clone, peer_manager_clone, Some(handle_clone)).await;
+                    lanchat_lib::web_server::start_server(port, port, pool_clone, peer_manager_clone, Some(handle_clone)).await;
                 });
             });
             Ok(())

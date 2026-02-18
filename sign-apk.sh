@@ -5,7 +5,7 @@
 KEYSTORE="lanchat-release.keystore"
 KEYSTORE_ALIAS="lanchat"
 APK_UNSIGNED="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk"
-APK_SIGNED="lanchat-release.apk"
+APK_SIGNED="lanchat-aarch64.apk"
 
 echo "=== LANChat APK 签名工具 ==="
 echo ""

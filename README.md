@@ -36,9 +36,6 @@ cargo build --bin lanchat --features desktop
 
 # Web 端（精简版，无 GUI 依赖）
 cd src-tauri
-cargo build --bin lanchat-web --features web --no-default-features
-
-# Release 版本
 cargo build --release --bin lanchat-web --features web --no-default-features
 
 # apk

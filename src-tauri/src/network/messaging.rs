@@ -134,8 +134,8 @@ pub async fn start_message_server(
     }
 }
 
-// 处理单个消息连接
-#[cfg(feature = "desktop")]
+// 处理单个消息连接 - 桌面端版本
+#[cfg(all(feature = "desktop", not(feature = "web")))]
 async fn handle_message_connection(
     mut stream: tokio::net::TcpStream,
     db_pool: sqlx::Pool<sqlx::Sqlite>,
@@ -184,8 +184,8 @@ async fn handle_message_connection(
     Ok(())
 }
 
-// Web 端的消息处理
-#[cfg(feature = "web")]
+// Web 端的消息处理 - 不带 AppHandle
+#[cfg(all(feature = "web", not(feature = "desktop")))]
 async fn handle_message_connection(
     mut stream: tokio::net::TcpStream,
     db_pool: sqlx::Pool<sqlx::Sqlite>,

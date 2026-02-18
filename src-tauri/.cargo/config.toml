@@ -17,6 +17,11 @@ linker = "i686-linux-android21-clang"
 ar = "llvm-ar"
 linker = "x86_64-linux-android21-clang"
 
+# Windows 交叉编译配置
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-ar"
+
 # 为 Android 目标强制使用 vendored OpenSSL
 [env]
 OPENSSL_STATIC = "1"
