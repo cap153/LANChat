@@ -5,7 +5,7 @@ edition = "2021"
 default-run = "lanchat"
 
 [lib]
-name = "lanchat_lib"
+name = "lanchat"
 crate-type = ["staticlib", "cdylib", "rlib"] 
 
 # 定义两个独立的二进制入口
