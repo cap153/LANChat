@@ -38,7 +38,6 @@ paru -S lanchat-bin
 
 前置要求：
 
-[https://v2.tauri.app/start/](https://v2.tauri.app/start/)  
 [https://v2.tauri.app/start/prerequisites/](https://v2.tauri.app/start/prerequisites/)   
 
 ```bash
@@ -61,7 +60,7 @@ cargo build --release --bin lanchat-web --features web --no-default-features
 
 ## 主题
 
-支持自定义`css`，文件名称随意，存在路径：
+支持自定义`css`，文件名称随意，存储路径：
 
 - **Linux**: `~/.config/lanchat/`
 - **Windows**: `%APPDATA%\.config\lanchat`
@@ -101,8 +100,11 @@ cargo build --release --bin lanchat-web --features web --no-default-features
 
 ### 🚧 进行中
 - [ ] 删除历史聊天记录
+- [ ] 标注未读消息
+- [ ] 更换默认图标
 
 ### 📋 计划中
+- [ ] 手动接收文件
 - [ ] 文件重新下载
 
 ## 运行
