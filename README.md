@@ -99,6 +99,9 @@ cargo build --release --bin lanchat-web --features web --no-default-features
 - [x] 单实例锁定功能
 
 ### 🚧 进行中
+- [ ] 手机端上传大文件流式传输
+- [ ] 手机端上传中的文件消息
+- [ ] 解决手机热点无法收到广播的问题
 - [ ] 删除历史聊天记录
 - [ ] 标注未读消息
 - [ ] 更换默认图标
@@ -149,9 +152,6 @@ LANChat/
 │   ├── capabilities/        # Tauri 权限配置
 │   ├── permissions/         # 自定义权限
 │   └── Cargo.toml
-├── start-web.sh             # Web 端启动脚本
-├── test-web-api.sh          # API 测试脚本
-├── WEB_DEPLOYMENT.md        # Web 端部署文档
 ├── AGENTS.md                # 开发计划和进度
 └── README.md                # 本文件
 ```
