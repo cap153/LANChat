@@ -21,20 +21,20 @@ fn calculate_optimal_chunk_size(file_size: usize) -> usize {
     // 获取可用内存（字节）
     let available_memory = sys.available_memory() as usize * 1024; // sysinfo 返回的是 KB
     
-    // 使用可用内存的 25%（桌面端可以更激进）
-    let max_chunk_memory = available_memory / 4;
+    // 使用可用内存的 80%（大胆使用内存以获得更快的速度）
+    let max_chunk_memory = available_memory * 80 / 100;
     
     // 根据文件大小选择基础分块大小
     let base_chunk_size = if file_size < 100 * 1024 * 1024 {
-        10 * 1024 * 1024  // < 100MB: 10MB
+        50 * 1024 * 1024  // < 100MB: 50MB
     } else if file_size < 500 * 1024 * 1024 {
-        20 * 1024 * 1024  // 100-500MB: 20MB
+        100 * 1024 * 1024  // 100-500MB: 100MB
     } else if file_size < 1024 * 1024 * 1024 {
-        50 * 1024 * 1024  // 500MB-1GB: 50MB
+        200 * 1024 * 1024  // 500MB-1GB: 200MB
     } else if file_size < 5 * 1024 * 1024 * 1024 {
-        100 * 1024 * 1024  // 1-5GB: 100MB
+        300 * 1024 * 1024  // 1-5GB: 300MB
     } else {
-        150 * 1024 * 1024  // > 5GB: 150MB
+        500 * 1024 * 1024  // > 5GB: 500MB
     };
     
     let chunk_size = std::cmp::min(base_chunk_size, max_chunk_memory);

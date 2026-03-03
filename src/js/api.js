@@ -318,29 +318,29 @@ function getAvailableMemory() {
 // 根据设备内存和文件大小计算最优分块大小
 function calculateOptimalChunkSize(fileSize) {
     const availableMemory = getAvailableMemory();
-    // 使用可用内存的 10-20%（保留空间给其他操作）
-    const maxChunkMemory = availableMemory * 0.15;
+    // 使用可用内存的 80%（大胆使用内存以获得更快的速度）
+    const maxChunkMemory = availableMemory * 0.8;
     
     // 根据文件大小选择分块策略
     let baseChunkSize;
     if (fileSize < 100 * 1024 * 1024) {
-        // < 100MB：5MB 分块
-        baseChunkSize = 5 * 1024 * 1024;
-    } else if (fileSize < 500 * 1024 * 1024) {
-        // 100-500MB：10MB 分块
-        baseChunkSize = 10 * 1024 * 1024;
-    } else if (fileSize < 1024 * 1024 * 1024) {
-        // 500MB-1GB：20MB 分块
-        baseChunkSize = 20 * 1024 * 1024;
-    } else if (fileSize < 5 * 1024 * 1024 * 1024) {
-        // 1-5GB：50MB 分块
+        // < 100MB：50MB 分块
         baseChunkSize = 50 * 1024 * 1024;
-    } else {
-        // > 5GB：100MB 分块
+    } else if (fileSize < 500 * 1024 * 1024) {
+        // 100-500MB：100MB 分块
         baseChunkSize = 100 * 1024 * 1024;
+    } else if (fileSize < 1024 * 1024 * 1024) {
+        // 500MB-1GB：200MB 分块
+        baseChunkSize = 200 * 1024 * 1024;
+    } else if (fileSize < 5 * 1024 * 1024 * 1024) {
+        // 1-5GB：300MB 分块
+        baseChunkSize = 300 * 1024 * 1024;
+    } else {
+        // > 5GB：500MB 分块
+        baseChunkSize = 500 * 1024 * 1024;
     }
     
-    // 根据可用内存调整分块大小（不超过可用内存的 15%）
+    // 根据可用内存调整分块大小（不超过可用内存的 80%）
     const chunkSize = Math.min(baseChunkSize, Math.floor(maxChunkMemory));
     
     console.log("[JS-API] 设备内存:", Math.round(availableMemory / (1024 * 1024 * 1024)), "GB");
@@ -565,21 +565,21 @@ async function apiSendFile(peerId, peerAddr, file) {
             if (navigator.deviceMemory) {
                 // 使用设备内存 API（如果可用）
                 const deviceMemory = navigator.deviceMemory * 1024 * 1024 * 1024; // 转换为字节
-                // 使用可用内存的 20%（Web 端可以更激进一些）
-                const maxChunkMemory = deviceMemory * 0.2;
+                // 使用可用内存的 80%（大胆使用内存以获得更快的速度）
+                const maxChunkMemory = deviceMemory * 0.8;
                 
                 // 根据文件大小选择基础分块大小
                 let baseChunkSize;
                 if (fileSize < 100 * 1024 * 1024) {
-                    baseChunkSize = 10 * 1024 * 1024;
-                } else if (fileSize < 500 * 1024 * 1024) {
-                    baseChunkSize = 20 * 1024 * 1024;
-                } else if (fileSize < 1024 * 1024 * 1024) {
                     baseChunkSize = 50 * 1024 * 1024;
-                } else if (fileSize < 5 * 1024 * 1024 * 1024) {
+                } else if (fileSize < 500 * 1024 * 1024) {
                     baseChunkSize = 100 * 1024 * 1024;
+                } else if (fileSize < 1024 * 1024 * 1024) {
+                    baseChunkSize = 200 * 1024 * 1024;
+                } else if (fileSize < 5 * 1024 * 1024 * 1024) {
+                    baseChunkSize = 300 * 1024 * 1024;
                 } else {
-                    baseChunkSize = 150 * 1024 * 1024;
+                    baseChunkSize = 500 * 1024 * 1024;
                 }
                 
                 chunkSize = Math.min(baseChunkSize, Math.floor(maxChunkMemory));
@@ -588,15 +588,15 @@ async function apiSendFile(peerId, peerAddr, file) {
             } else {
                 // 降级方案：根据文件大小选择分块大小
                 if (fileSize < 100 * 1024 * 1024) {
-                    chunkSize = 10 * 1024 * 1024;
-                } else if (fileSize < 500 * 1024 * 1024) {
-                    chunkSize = 20 * 1024 * 1024;
-                } else if (fileSize < 1024 * 1024 * 1024) {
                     chunkSize = 50 * 1024 * 1024;
-                } else if (fileSize < 5 * 1024 * 1024 * 1024) {
+                } else if (fileSize < 500 * 1024 * 1024) {
                     chunkSize = 100 * 1024 * 1024;
+                } else if (fileSize < 1024 * 1024 * 1024) {
+                    chunkSize = 200 * 1024 * 1024;
+                } else if (fileSize < 5 * 1024 * 1024 * 1024) {
+                    chunkSize = 300 * 1024 * 1024;
                 } else {
-                    chunkSize = 150 * 1024 * 1024;
+                    chunkSize = 500 * 1024 * 1024;
                 }
             }
             
