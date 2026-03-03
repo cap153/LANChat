@@ -6,11 +6,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Peer {
-    pub id: String,       // UUID
+    pub id: String, // UUID
     pub name: String,
     pub addr: String,
-    pub last_seen: u64,   // Unix 时间戳
-    pub is_offline: bool, // 是否离线
+    pub last_seen: u64,           // Unix 时间戳
+    pub is_offline: bool,         // 是否离线
     pub available_memory_mb: u64, // 可用内存（MB）
 }
 
@@ -32,14 +32,20 @@ impl PeerManager {
     }
 
     // 添加或更新用户（包含内存信息）
-    pub fn add_or_update_with_memory(&self, id: String, name: String, addr: String, available_memory_mb: u64) {
+    pub fn add_or_update_with_memory(
+        &self,
+        id: String,
+        name: String,
+        addr: String,
+        available_memory_mb: u64,
+    ) {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
         let mut peers = self.peers.write().unwrap();
-        
+
         if let Some(peer) = peers.get_mut(&id) {
             // 已存在,更新信息
             let was_offline = peer.is_offline;
@@ -48,11 +54,17 @@ impl PeerManager {
             peer.last_seen = now;
             peer.is_offline = false;
             peer.available_memory_mb = available_memory_mb;
-            
+
             if was_offline {
-                println!("[PeerManager] 用户重新上线: {} ({}) - 可用内存: {} MB", peer.name, peer.id, available_memory_mb);
+                println!(
+                    "[PeerManager] 用户重新上线: {} ({}) - 可用内存: {} MB",
+                    peer.name, peer.id, available_memory_mb
+                );
             } else {
-                println!("[PeerManager] 更新用户: {} ({}) - 可用内存: {} MB", peer.name, peer.id, available_memory_mb);
+                println!(
+                    "[PeerManager] 更新用户: {} ({}) - 可用内存: {} MB",
+                    peer.name, peer.id, available_memory_mb
+                );
             }
         } else {
             // 新用户
@@ -64,7 +76,10 @@ impl PeerManager {
                 is_offline: false,
                 available_memory_mb,
             };
-            println!("[PeerManager] 添加新用户: {} ({}) - 可用内存: {} MB", name, id, available_memory_mb);
+            println!(
+                "[PeerManager] 添加新用户: {} ({}) - 可用内存: {} MB",
+                name, id, available_memory_mb
+            );
             peers.insert(id, peer);
         }
     }
@@ -77,16 +92,19 @@ impl PeerManager {
             .as_secs();
 
         let mut peers = self.peers.write().unwrap();
-        
+
         // 标记超过 6 秒未见的用户为离线
         for peer in peers.values_mut() {
             let time_since_seen = now - peer.last_seen;
             if time_since_seen > 6 && !peer.is_offline {
-                println!("[PeerManager] 用户离线: {} ({}) - {}秒未见", peer.name, peer.id, time_since_seen);
+                println!(
+                    "[PeerManager] 用户离线: {} ({}) - {}秒未见",
+                    peer.name, peer.id, time_since_seen
+                );
                 peer.is_offline = true;
             }
         }
-        
+
         // 删除超过 60 秒的用户
         peers.retain(|id, peer| {
             let keep = now - peer.last_seen < 60;
@@ -101,7 +119,7 @@ impl PeerManager {
     pub fn get_all_peers(&self) -> Vec<Peer> {
         // 先标记离线用户
         self.mark_stale_as_offline();
-        
+
         let peers = self.peers.read().unwrap();
         peers.values().cloned().collect()
     }
@@ -109,11 +127,7 @@ impl PeerManager {
     // 获取所有在线用户（过滤掉离线的）
     pub fn get_active_peers(&self) -> Vec<Peer> {
         let peers = self.peers.read().unwrap();
-        peers
-            .values()
-            .filter(|p| !p.is_offline)
-            .cloned()
-            .collect()
+        peers.values().filter(|p| !p.is_offline).cloned().collect()
     }
 }
 

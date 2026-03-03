@@ -4,7 +4,11 @@
 use lanchat::db;
 use lanchat::peers::PeerManager;
 use std::sync::Arc;
-use tauri::{Manager, menu::{Menu, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent}};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{TrayIconBuilder, TrayIconEvent},
+    Manager,
+};
 
 fn main() {
     tauri::Builder::default()
@@ -67,24 +71,28 @@ fn main() {
                 .menu(&menu)
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("LANChat")
-                .on_menu_event(move |app, event| {
-                    match event.id.as_ref() {
-                        "show" => {
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                .on_menu_event(move |app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
                         }
-                        "quit" => {
-                            app.exit(0);
-                        }
-                        _ => {}
                     }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button, button_state, .. } = event {
-                        if button == tauri::tray::MouseButton::Left 
-                            && button_state == tauri::tray::MouseButtonState::Up {
+                    if let TrayIconEvent::Click {
+                        button,
+                        button_state,
+                        ..
+                    } = event
+                    {
+                        if button == tauri::tray::MouseButton::Left
+                            && button_state == tauri::tray::MouseButtonState::Up
+                        {
                             let app = tray.app_handle();
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.show();
@@ -101,10 +109,8 @@ fn main() {
                 let my_name = db::get_username(&pool)
                     .await
                     .unwrap_or_else(|_| "Unknown".into());
-                
-                let my_id = db::get_user_id(&pool)
-                    .await
-                    .expect("无法获取或生成用户 ID");
+
+                let my_id = db::get_user_id(&pool).await.expect("无法获取或生成用户 ID");
 
                 handle.manage(db::DbState { pool: pool.clone() });
                 println!("[Main] 我的用户名: {}", my_name);
@@ -112,7 +118,7 @@ fn main() {
 
                 // 创建全局用户管理器
                 let peer_manager = Arc::new(PeerManager::new());
-                
+
                 // 将 PeerManager 注册到 Tauri 状态管理
                 handle.manage(lanchat::commands::PeerState {
                     manager: peer_manager.clone(),
@@ -124,7 +130,14 @@ fn main() {
                 let peer_manager_clone = peer_manager.clone();
                 tokio::spawn(async move {
                     println!("[Main] 开启监听线程...");
-                    lanchat::network::discovery::start_listening(port, id1, name1, Some(h1), peer_manager_clone).await;
+                    lanchat::network::discovery::start_listening(
+                        port,
+                        id1,
+                        name1,
+                        Some(h1),
+                        peer_manager_clone,
+                    )
+                    .await;
                 });
 
                 let id2 = my_id.clone();
@@ -140,7 +153,14 @@ fn main() {
                 let handle_clone = handle.clone();
                 tokio::spawn(async move {
                     println!("[Main] 启动 HTTP 服务器在端口 {}...", port);
-                    lanchat::web_server::start_server(port, port, pool_clone, peer_manager_clone, Some(handle_clone)).await;
+                    lanchat::web_server::start_server(
+                        port,
+                        port,
+                        pool_clone,
+                        peer_manager_clone,
+                        Some(handle_clone),
+                    )
+                    .await;
                 });
             });
             Ok(())

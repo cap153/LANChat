@@ -13,9 +13,9 @@ pub mod web_server;
 #[cfg(feature = "desktop")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    use tauri::Manager;
     use std::sync::Arc;
-    
+    use tauri::Manager;
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -49,10 +49,8 @@ pub fn run() {
                 let my_name = db::get_username(&pool)
                     .await
                     .unwrap_or_else(|_| "Unknown".into());
-                
-                let my_id = db::get_user_id(&pool)
-                    .await
-                    .expect("无法获取或生成用户 ID");
+
+                let my_id = db::get_user_id(&pool).await.expect("无法获取或生成用户 ID");
 
                 handle.manage(db::DbState { pool: pool.clone() });
                 println!("[Lib] 我的用户名: {}", my_name);
@@ -60,7 +58,7 @@ pub fn run() {
 
                 // 创建全局用户管理器
                 let peer_manager = Arc::new(peers::PeerManager::new());
-                
+
                 // 将 PeerManager 注册到 Tauri 状态管理
                 handle.manage(commands::PeerState {
                     manager: peer_manager.clone(),
@@ -72,7 +70,14 @@ pub fn run() {
                 let peer_manager_clone = peer_manager.clone();
                 tokio::spawn(async move {
                     println!("[Lib] 开启监听线程...");
-                    network::discovery::start_listening(port, id1, name1, Some(h1), peer_manager_clone).await;
+                    network::discovery::start_listening(
+                        port,
+                        id1,
+                        name1,
+                        Some(h1),
+                        peer_manager_clone,
+                    )
+                    .await;
                 });
 
                 let id2 = my_id.clone();
@@ -88,7 +93,14 @@ pub fn run() {
                 let handle_clone = handle.clone();
                 tokio::spawn(async move {
                     println!("[Lib] 启动 HTTP 服务器在端口 {}...", port);
-                    web_server::start_server(port, port, pool_clone, peer_manager_clone, Some(handle_clone)).await;
+                    web_server::start_server(
+                        port,
+                        port,
+                        pool_clone,
+                        peer_manager_clone,
+                        Some(handle_clone),
+                    )
+                    .await;
                 });
             });
             Ok(())

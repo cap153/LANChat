@@ -1,7 +1,7 @@
+use socket2::{Domain, Protocol, Socket, Type};
 use std::net::UdpSocket;
 use std::sync::Arc;
 use std::time::Duration;
-use socket2::{Socket, Domain, Type, Protocol};
 
 #[cfg(feature = "desktop")]
 use tauri::{AppHandle, Emitter};
@@ -11,28 +11,29 @@ use crate::peers::PeerManager;
 // 创建支持广播的 UDP socket（Windows 兼容）
 fn create_broadcast_socket(bind_addr: &str) -> Result<UdpSocket, std::io::Error> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-    
+
     // 设置广播权限
     socket.set_broadcast(true)?;
-    
+
     // Windows 特定：允许地址重用
     #[cfg(target_os = "windows")]
     {
         socket.set_reuse_address(true)?;
     }
-    
+
     // Unix 特定：允许端口重用
     #[cfg(not(target_os = "windows"))]
     {
         socket.set_reuse_address(true)?;
         socket.set_reuse_port(true)?;
     }
-    
+
     // 绑定地址
-    let addr: std::net::SocketAddr = bind_addr.parse()
+    let addr: std::net::SocketAddr = bind_addr
+        .parse()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
     socket.bind(&addr.into())?;
-    
+
     Ok(socket.into())
 }
 
@@ -58,14 +59,17 @@ pub async fn start_announcing(port: u16, user_id: String, pool: sqlx::Pool<sqlx:
                 "Unknown".to_string()
             }
         };
-        
+
         // 获取可用内存（MB）
         use sysinfo::System;
         let mut sys = System::new_all();
         sys.refresh_all();
         let available_memory_mb = sys.available_memory() / 1024; // 转换为 MB
-        
-        let msg = format!("LANChat|ONLINE|{}|{}|{}|{}", user_id, username, port, available_memory_mb);
+
+        let msg = format!(
+            "LANChat|ONLINE|{}|{}|{}|{}",
+            user_id, username, port, available_memory_mb
+        );
         match socket.send_to(msg.as_bytes(), &broadcast_addr) {
             Ok(size) => println!("[UDP] 广播成功: {} 字节 -> {}", size, broadcast_addr),
             Err(e) => eprintln!("[UDP] 广播失败: {}", e),
@@ -76,7 +80,13 @@ pub async fn start_announcing(port: u16, user_id: String, pool: sqlx::Pool<sqlx:
 
 // 桌面端版本 - 带 AppHandle
 #[cfg(all(feature = "desktop", not(feature = "web")))]
-pub async fn start_listening(port: u16, my_id: String, _my_name: String, app: Option<AppHandle>, peer_manager: Arc<PeerManager>) {
+pub async fn start_listening(
+    port: u16,
+    my_id: String,
+    _my_name: String,
+    app: Option<AppHandle>,
+    peer_manager: Arc<PeerManager>,
+) {
     let bind_addr = format!("0.0.0.0:{}", port);
     let socket = match create_broadcast_socket(&bind_addr) {
         Ok(s) => s,
@@ -85,7 +95,7 @@ pub async fn start_listening(port: u16, my_id: String, _my_name: String, app: Op
             return;
         }
     };
-    
+
     let mut buf = [0u8; 1024];
     println!("[UDP] 正在端口 {} 监听邻居...", port);
 
@@ -93,24 +103,32 @@ pub async fn start_listening(port: u16, my_id: String, _my_name: String, app: Op
         if let Ok((size, addr)) = socket.recv_from(&mut buf) {
             let msg = String::from_utf8_lossy(&buf[..size]);
             let parts: Vec<&str> = msg.split('|').collect();
-            
+
             // 新协议: LANChat|ONLINE|UUID|用户名|端口|可用内存(MB)
             if parts.len() >= 6 && parts[0] == "LANChat" {
                 let peer_id = parts[2].to_string();
                 let name = parts[3].to_string();
                 let peer_port = parts[4];
                 let available_memory_mb: u64 = parts[5].parse().unwrap_or(0);
-                
+
                 // 忽略自己
                 if peer_id == my_id {
                     continue;
                 }
 
                 let peer_addr = format!("{}:{}", addr.ip(), peer_port);
-                println!("[UDP] 发现用户: {} ({}) at {} (可用内存: {} MB)", name, peer_id, peer_addr, available_memory_mb);
+                println!(
+                    "[UDP] 发现用户: {} ({}) at {} (可用内存: {} MB)",
+                    name, peer_id, peer_addr, available_memory_mb
+                );
 
                 // 添加到全局用户列表
-                peer_manager.add_or_update_with_memory(peer_id.clone(), name.clone(), peer_addr.clone(), available_memory_mb);
+                peer_manager.add_or_update_with_memory(
+                    peer_id.clone(),
+                    name.clone(),
+                    peer_addr.clone(),
+                    available_memory_mb,
+                );
 
                 // 只有当 app 存在时（桌面端）才发送事件
                 if let Some(app_handle) = &app {
@@ -131,7 +149,12 @@ pub async fn start_listening(port: u16, my_id: String, _my_name: String, app: Op
 
 // Web 端版本 - 不带 AppHandle
 #[cfg(all(feature = "web", not(feature = "desktop")))]
-pub async fn start_listening(port: u16, my_id: String, _my_name: String, peer_manager: Arc<PeerManager>) {
+pub async fn start_listening(
+    port: u16,
+    my_id: String,
+    _my_name: String,
+    peer_manager: Arc<PeerManager>,
+) {
     let bind_addr = format!("0.0.0.0:{}", port);
     let socket = match create_broadcast_socket(&bind_addr) {
         Ok(s) => s,
@@ -140,7 +163,7 @@ pub async fn start_listening(port: u16, my_id: String, _my_name: String, peer_ma
             return;
         }
     };
-    
+
     let mut buf = [0u8; 1024];
     println!("[UDP] 正在端口 {} 监听邻居...", port);
 
@@ -148,40 +171,53 @@ pub async fn start_listening(port: u16, my_id: String, _my_name: String, peer_ma
         if let Ok((size, addr)) = socket.recv_from(&mut buf) {
             let msg = String::from_utf8_lossy(&buf[..size]);
             let parts: Vec<&str> = msg.split('|').collect();
-            
+
             // 新协议: LANChat|ONLINE|UUID|用户名|端口|可用内存(MB)
             if parts.len() >= 6 && parts[0] == "LANChat" {
                 let peer_id = parts[2].to_string();
                 let name = parts[3].to_string();
                 let peer_port = parts[4];
                 let available_memory_mb: u64 = parts[5].parse().unwrap_or(0);
-                
+
                 // 忽略自己
                 if peer_id == my_id {
                     continue;
                 }
 
                 let peer_addr = format!("{}:{}", addr.ip(), peer_port);
-                println!("[UDP] 发现用户: {} ({}) at {} (可用内存: {} MB)", name, peer_id, peer_addr, available_memory_mb);
-                
+                println!(
+                    "[UDP] 发现用户: {} ({}) at {} (可用内存: {} MB)",
+                    name, peer_id, peer_addr, available_memory_mb
+                );
+
                 // 添加到全局用户列表
-                peer_manager.add_or_update_with_memory(peer_id, name, peer_addr, available_memory_mb);
+                peer_manager.add_or_update_with_memory(
+                    peer_id,
+                    name,
+                    peer_addr,
+                    available_memory_mb,
+                );
             }
         }
     }
 }
 
 // 发送单次广播（用于改名后立即通知其他用户）
-pub async fn send_single_broadcast(port: u16, user_id: String, username: String) -> Result<(), String> {
-    let socket = create_broadcast_socket("0.0.0.0:0")
-        .map_err(|e| format!("创建广播socket失败: {}", e))?;
+pub async fn send_single_broadcast(
+    port: u16,
+    user_id: String,
+    username: String,
+) -> Result<(), String> {
+    let socket =
+        create_broadcast_socket("0.0.0.0:0").map_err(|e| format!("创建广播socket失败: {}", e))?;
 
     let msg = format!("LANChat|ONLINE|{}|{}|{}", user_id, username, port);
     let broadcast_addr = format!("255.255.255.255:{}", port);
 
-    socket.send_to(msg.as_bytes(), &broadcast_addr)
+    socket
+        .send_to(msg.as_bytes(), &broadcast_addr)
         .map_err(|e| format!("发送广播失败: {}", e))?;
-    
+
     println!("[UDP] 发送单次广播: {} ({})", username, user_id);
     Ok(())
 }

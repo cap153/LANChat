@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 // 消息结构体 - 对应 messages 表
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Message {
-    pub id: i64,  // SQLite 的 INTEGER PRIMARY KEY 是 i64
+    pub id: i64, // SQLite 的 INTEGER PRIMARY KEY 是 i64
     pub sender_id: String,
-    pub receiver_id: Option<String>,  // 新增接收者ID字段
+    pub receiver_id: Option<String>, // 新增接收者ID字段
     pub content: String,
     pub msg_type: String,
     pub timestamp: i64,
@@ -45,7 +45,7 @@ impl From<Message> for MessageResponse {
             file_status: None,
             file_size: None,
         };
-        
+
         // 如果是文件消息，添加文件信息
         if msg.msg_type == "file" {
             if let Some(ref path) = msg.file_path {
@@ -54,22 +54,22 @@ impl From<Message> for MessageResponse {
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("");
-                
+
                 // 提取文件 ID（如果路径包含 UUID）
                 let file_id = filename.split('_').next().unwrap_or(filename);
-                
+
                 response.file_id = Some(file_id.to_string());
-                response.file_name = Some(msg.content.clone());  // content 存储的是文件名
+                response.file_name = Some(msg.content.clone()); // content 存储的是文件名
                 response.file_path = Some(path.clone());
                 response.file_status = msg.file_status.clone();
-                
+
                 // 尝试获取文件大小
                 if let Ok(metadata) = std::fs::metadata(path) {
                     response.file_size = Some(metadata.len());
                 }
             }
         }
-        
+
         response
     }
 }
