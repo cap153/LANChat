@@ -3,11 +3,47 @@ use crate::db::DbState;
 use crate::peers::{Peer, PeerManager};
 use std::sync::Arc;
 use tauri::State;
-use tokio::io::AsyncReadExt;
+
 
 // 用于管理 PeerManager 的状态
 pub struct PeerState {
     pub manager: Arc<PeerManager>,
+}
+
+/// 根据设备内存和文件大小计算最优分块大小
+#[cfg(feature = "desktop")]
+fn calculate_optimal_chunk_size(file_size: usize) -> usize {
+    use sysinfo::System;
+    
+    let mut sys = System::new_all();
+    sys.refresh_all();
+    
+    // 获取可用内存（字节）
+    let available_memory = sys.available_memory() as usize * 1024; // sysinfo 返回的是 KB
+    
+    // 使用可用内存的 25%（桌面端可以更激进）
+    let max_chunk_memory = available_memory / 4;
+    
+    // 根据文件大小选择基础分块大小
+    let base_chunk_size = if file_size < 100 * 1024 * 1024 {
+        10 * 1024 * 1024  // < 100MB: 10MB
+    } else if file_size < 500 * 1024 * 1024 {
+        20 * 1024 * 1024  // 100-500MB: 20MB
+    } else if file_size < 1024 * 1024 * 1024 {
+        50 * 1024 * 1024  // 500MB-1GB: 50MB
+    } else if file_size < 5 * 1024 * 1024 * 1024 {
+        100 * 1024 * 1024  // 1-5GB: 100MB
+    } else {
+        150 * 1024 * 1024  // > 5GB: 150MB
+    };
+    
+    let chunk_size = std::cmp::min(base_chunk_size, max_chunk_memory);
+    
+    println!("[Command] 系统可用内存: {} MB", available_memory / (1024 * 1024));
+    println!("[Command] 内存预算: {} MB", max_chunk_memory / (1024 * 1024));
+    println!("[Command] 计算的分块大小: {} MB", chunk_size / (1024 * 1024));
+    
+    chunk_size
 }
 
 #[tauri::command]
@@ -184,7 +220,7 @@ pub async fn send_file(
     let my_id = crate::db::get_user_id(&state.pool).await?;
     
     // 分块上传
-    let chunk_size = 50 * 1024 * 1024; // 50MB 分块
+    let chunk_size = calculate_optimal_chunk_size(file_size);
     let total_chunks = (file_size + chunk_size - 1) / chunk_size;
     
     println!("[Command] 开始分块上传: 文件大小={}, 分块大小={}, 总分块数={}", 

@@ -560,11 +560,49 @@ async function apiSendFile(peerId, peerAddr, file) {
             console.log("[JS-API] 文件信息:", fileName, fileSize, "字节");
             console.log("[JS-API] sender_id (我的ID):", myId);
             
-            // 计算分块大小（Web 端使用 10MB 分块）
-            const chunkSize = 10 * 1024 * 1024;
+            // 根据设备内存动态计算分块大小
+            let chunkSize;
+            if (navigator.deviceMemory) {
+                // 使用设备内存 API（如果可用）
+                const deviceMemory = navigator.deviceMemory * 1024 * 1024 * 1024; // 转换为字节
+                // 使用可用内存的 20%（Web 端可以更激进一些）
+                const maxChunkMemory = deviceMemory * 0.2;
+                
+                // 根据文件大小选择基础分块大小
+                let baseChunkSize;
+                if (fileSize < 100 * 1024 * 1024) {
+                    baseChunkSize = 10 * 1024 * 1024;
+                } else if (fileSize < 500 * 1024 * 1024) {
+                    baseChunkSize = 20 * 1024 * 1024;
+                } else if (fileSize < 1024 * 1024 * 1024) {
+                    baseChunkSize = 50 * 1024 * 1024;
+                } else if (fileSize < 5 * 1024 * 1024 * 1024) {
+                    baseChunkSize = 100 * 1024 * 1024;
+                } else {
+                    baseChunkSize = 150 * 1024 * 1024;
+                }
+                
+                chunkSize = Math.min(baseChunkSize, Math.floor(maxChunkMemory));
+                console.log("[JS-API] 设备内存:", Math.round(deviceMemory / (1024 * 1024 * 1024)), "GB");
+                console.log("[JS-API] 可用内存预算:", Math.round(maxChunkMemory / (1024 * 1024)), "MB");
+            } else {
+                // 降级方案：根据文件大小选择分块大小
+                if (fileSize < 100 * 1024 * 1024) {
+                    chunkSize = 10 * 1024 * 1024;
+                } else if (fileSize < 500 * 1024 * 1024) {
+                    chunkSize = 20 * 1024 * 1024;
+                } else if (fileSize < 1024 * 1024 * 1024) {
+                    chunkSize = 50 * 1024 * 1024;
+                } else if (fileSize < 5 * 1024 * 1024 * 1024) {
+                    chunkSize = 100 * 1024 * 1024;
+                } else {
+                    chunkSize = 150 * 1024 * 1024;
+                }
+            }
+            
             const totalChunks = Math.ceil(fileSize / chunkSize);
             
-            console.log("[JS-API] 分块大小:", chunkSize / (1024 * 1024), "MB, 总分块数:", totalChunks);
+            console.log("[JS-API] 计算的分块大小:", Math.round(chunkSize / (1024 * 1024)), "MB, 总分块数:", totalChunks);
             
             const uploadUrl = `http://${peerAddr}/api/upload`;
             console.log("[JS-API] 上传地址:", uploadUrl);
