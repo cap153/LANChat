@@ -463,27 +463,56 @@ pub async fn save_file_message(
     file_size: usize,
     file_path: String,
     status: String,
-) -> Result<(), String> {
+) -> Result<i64, String> {
     println!("[Command] 收到前端请求: save_file_message");
     println!("[Command] 文件: {}, 大小: {}, 状态: {}", file_name, file_size, status);
     
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
-    
-    sqlx::query(
-        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, ?, 'file', ?, ?, ?)"
+    // 检查是否存在相同文件名和状态为 uploading 的消息
+    let existing = sqlx::query_as::<_, (i64,)>(
+        "SELECT id FROM messages WHERE receiver_id = ? AND content = ? AND msg_type = 'file' AND file_status = 'uploading' ORDER BY id DESC LIMIT 1"
     )
     .bind(&peer_id)
     .bind(&file_name)
-    .bind(timestamp)
-    .bind(&file_path)
-    .bind(&status)
-    .execute(&state.pool)
+    .fetch_optional(&state.pool)
     .await
-    .map_err(|e| format!("保存消息失败: {}", e))?;
+    .map_err(|e| format!("查询消息失败: {}", e))?;
     
-    println!("[Command] 文件消息已保存到数据库");
-    Ok(())
+    if let Some((msg_id,)) = existing {
+        // 更新现有的 uploading 消息
+        println!("[Command] 更新现有消息 ID: {}, 状态: {} -> {}", msg_id, "uploading", status);
+        sqlx::query(
+            "UPDATE messages SET file_path = ?, file_status = ? WHERE id = ?"
+        )
+        .bind(&file_path)
+        .bind(&status)
+        .bind(msg_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| format!("更新消息失败: {}", e))?;
+        
+        println!("[Command] 消息已更新");
+        Ok(msg_id)
+    } else {
+        // 插入新消息
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        
+        let result = sqlx::query(
+            "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, ?, 'file', ?, ?, ?)"
+        )
+        .bind(&peer_id)
+        .bind(&file_name)
+        .bind(timestamp)
+        .bind(&file_path)
+        .bind(&status)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| format!("保存消息失败: {}", e))?;
+        
+        let msg_id = result.last_insert_rowid();
+        println!("[Command] 新消息已保存，ID: {}", msg_id);
+        Ok(msg_id)
+    }
 }
