@@ -97,11 +97,11 @@ cargo build --release --bin lanchat-web --features web --no-default-features
 - [x] 文件传输功能
 - [x] Windows 端适配
 - [x] 单实例锁定功能
+- [x] 文件流式传输
+- [x] 支持广播和组播
+- [x] Android 随机热点网段暴力覆盖
 
 ### 🚧 进行中
-- [ ] 手机端上传大文件流式传输
-- [ ] 手机端上传中的文件消息
-- [ ] 解决手机热点无法收到广播的问题
 - [ ] 删除历史聊天记录
 - [ ] 标注未读消息
 - [ ] 更换默认图标
