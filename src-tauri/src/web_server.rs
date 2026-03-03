@@ -264,22 +264,10 @@ async fn send_message_http(
     }
     
     // 保存到数据库
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
-    
-    if let Err(e) = sqlx::query(
-        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp) VALUES ('me', ?, ?, 'text', ?)"
-    )
-    .bind(&payload.peer_id)   // 接收者ID
-    .bind(&payload.content)
-    .bind(timestamp)
-    .execute(&state.pool)
-    .await {
+    if let Err(e) = crate::db::save_text_message(&state.pool, payload.peer_id, payload.content).await {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse { error: e.to_string() }),
+            Json(ErrorResponse { error: e }),
         ).into_response();
     }
     
@@ -364,18 +352,13 @@ async fn save_message_to_db(
     pool: &Pool<Sqlite>,
     message: &crate::network::messaging::TextMessage,
 ) -> Result<(), String> {
-    sqlx::query(
-        "INSERT INTO messages (sender_id, content, msg_type, timestamp) VALUES (?, ?, ?, ?)"
-    )
-    .bind(&message.from_id)
-    .bind(&message.content)
-    .bind(&message.msg_type)
-    .bind(message.timestamp as i64)
-    .execute(pool)
-    .await
-    .map_err(|e| format!("保存消息失败: {}", e))?;
-    
-    Ok(())
+    crate::db::save_received_text_message(
+        pool,
+        message.from_id.clone(),
+        message.content.clone(),
+        message.msg_type.clone(),
+        message.timestamp as i64,
+    ).await
 }
 
 async fn upload_file_http(
@@ -477,22 +460,29 @@ async fn upload_file_http(
     if chunk_index > 0 && file_name.is_empty() {
         println!("[Web Server] 第 {} 块，file_name 为空，从数据库查询 (sender_id={})", chunk_index + 1, sender_id);
         // 从数据库查询该发送者最近的 downloading 状态的文件
-        if let Ok(Some(row)) = sqlx::query("SELECT content FROM messages WHERE sender_id = ? AND msg_type = 'file' AND file_status = 'downloading' ORDER BY id DESC LIMIT 1")
-            .bind(&sender_id)
-            .fetch_optional(&state.pool)
-            .await
-        {
-            use sqlx::Row;
-            file_name = row.get("content");
-            println!("[Web Server] 从数据库查询到文件名: {} (sender_id={})", file_name, sender_id);
-        } else {
-            eprintln!("[Web Server] ✗ 无法确定文件名 (sender_id={})", sender_id);
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse { 
-                    error: "无法确定文件名".to_string() 
-                }),
-            ).into_response();
+        match crate::db::get_downloading_file(&state.pool, &sender_id).await {
+            Ok(Some(name)) => {
+                file_name = name;
+                println!("[Web Server] 从数据库查询到文件名: {} (sender_id={})", file_name, sender_id);
+            }
+            Ok(None) => {
+                eprintln!("[Web Server] ✗ 无法确定文件名 (sender_id={})", sender_id);
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse { 
+                        error: "无法确定文件名".to_string() 
+                    }),
+                ).into_response();
+            }
+            Err(e) => {
+                eprintln!("[Web Server] ✗ 数据库查询失败: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse { 
+                        error: format!("数据库查询失败: {}", e) 
+                    }),
+                ).into_response();
+            }
         }
     }
     
@@ -554,18 +544,7 @@ async fn upload_file_http(
             .unwrap()
             .as_secs() as i64;
         
-        let result = sqlx::query(
-            "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES (?, ?, ?, 'file', ?, ?, 'downloading')"
-        )
-        .bind(&sender_id)
-        .bind(&crate::db::get_user_id(&state.pool).await.unwrap_or_else(|_| "unknown".to_string()))
-        .bind(&file_name)
-        .bind(timestamp)
-        .bind(path.to_str().unwrap_or(""))
-        .execute(&state.pool)
-        .await;
-        
-        match result {
+        match crate::db::create_received_file_record(&state.pool, sender_id.clone(), file_name.clone(), path.to_str().unwrap_or("").to_string(), timestamp).await {
             Ok(_) => {
                 println!("[Web Server] ✓ 文件接收开始，已保存到数据库");
                 
@@ -594,14 +573,7 @@ async fn upload_file_http(
     
     // 在最后一块时更新状态为 accepted
     if chunk_index == chunk_total - 1 && !file_name.is_empty() {
-        let result = sqlx::query(
-            "UPDATE messages SET file_status = 'accepted' WHERE content = ? AND msg_type = 'file' AND file_status = 'downloading'"
-        )
-        .bind(&file_name)
-        .execute(&state.pool)
-        .await;
-        
-        match result {
+        match crate::db::update_file_status(&state.pool, &file_name, "accepted").await {
             Ok(_) => {
                 println!("[Web Server] ✓ 文件接收完成，状态已更新为 accepted");
                 
@@ -659,16 +631,8 @@ async fn accept_file_http(
     
     // 先列出所有文件消息，方便调试
     println!("[Web Server] 查询所有文件消息...");
-    if let Ok(rows) = sqlx::query("SELECT id, sender_id, content, file_path, file_status FROM messages WHERE msg_type = 'file' ORDER BY id DESC LIMIT 10")
-        .fetch_all(&state.pool)
-        .await {
-        use sqlx::Row;
-        for row in rows {
-            let id: i64 = row.get("id");
-            let sender: String = row.get("sender_id");
-            let content: String = row.get("content");
-            let path: String = row.get("file_path");
-            let status: String = row.get("file_status");
+    if let Ok(rows) = crate::db::get_all_file_messages(&state.pool, 10).await {
+        for (id, sender, content, path, status) in rows {
             println!("[Web Server]   ID={}, sender={}, content={}, path={}, status={}", 
                      id, sender, content, path, status);
         }
@@ -678,17 +642,10 @@ async fn accept_file_http(
     let query_pattern = format!("%{}%", file_id);
     println!("[Web Server] 查询模式: {}", query_pattern);
     
-    let row = sqlx::query(
-        "SELECT file_path, content FROM messages WHERE file_path LIKE ? AND file_status = 'pending'"
-    )
-    .bind(&query_pattern)
-    .fetch_optional(&state.pool)
-    .await;
-    
-    let row = match row {
-        Ok(Some(r)) => {
+    let row = match crate::db::get_pending_file_by_path(&state.pool, &query_pattern).await {
+        Ok(Some((path, name))) => {
             println!("[Web Server] ✓ 找到匹配的 pending 文件记录");
-            r
+            (path, name)
         },
         Ok(None) => {
             println!("[Web Server] ✗ 未找到匹配的 pending 文件");
@@ -710,12 +667,8 @@ async fn accept_file_http(
         }
     };
     
-    use sqlx::Row;
-    let temp_path: String = row.get("file_path");
-    let file_name: String = row.get("content");
-    
-    println!("[Web Server] 临时路径: {}", temp_path);
-    println!("[Web Server] 文件名: {}", file_name);
+    let temp_path = row.0;
+    let file_name = row.1;
     
     // 检查文件是否存在（可能还在上传中）
     if !std::path::Path::new(&temp_path).exists() {
@@ -778,13 +731,12 @@ async fn accept_file_http(
     }
     
     // 更新数据库状态
-    if let Err(e) = sqlx::query(
-        "UPDATE messages SET file_status = 'accepted', file_path = ? WHERE file_path = ?"
-    )
-    .bind(final_path.to_str().unwrap())
-    .bind(&temp_path)
-    .execute(&state.pool)
-    .await {
+    if let Err(e) = crate::db::update_file_status_by_path(
+        &state.pool,
+        &temp_path,
+        final_path.to_str().unwrap(),
+        "accepted"
+    ).await {
         println!("[Web Server] ✗ 更新数据库失败: {}", e);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -829,17 +781,13 @@ async fn download_file_http(
 // 获取下载目录
 async fn get_download_dir(pool: &Pool<Sqlite>) -> std::path::PathBuf {
     // 从数据库读取配置
-    if let Ok(row) = sqlx::query("SELECT value FROM settings WHERE key = 'download_path'")
-        .fetch_one(pool)
-        .await
-    {
-        use sqlx::Row;
-        let path: String = row.get("value");
-        return std::path::PathBuf::from(path);
+    match crate::db::get_download_path(pool).await {
+        Ok(path) => std::path::PathBuf::from(path),
+        Err(_) => {
+            // 默认路径
+            std::env::temp_dir().join("lanchat_downloads")
+        }
     }
-    
-    // 默认路径
-    std::env::temp_dir().join("lanchat_downloads")
 }
 
 // 创建上传记录（Web 端发送文件时）
@@ -856,16 +804,7 @@ async fn create_upload_record_http(
 ) -> impl IntoResponse {
     println!("[Web Server] 创建上传记录: {}", payload.file_name);
     
-    let result = sqlx::query(
-        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, ?, 'file', ?, '', 'uploading')"
-    )
-    .bind(&payload.receiver_id)  // 接收者ID
-    .bind(&payload.file_name)
-    .bind(payload.timestamp)
-    .execute(&state.pool)
-    .await;
-    
-    match result {
+    match crate::db::create_upload_record(&state.pool, payload.receiver_id.clone(), payload.file_name.clone(), payload.timestamp).await {
         Ok(_) => {
             println!("[Web Server] ✓ 上传记录已创建");
             Json(serde_json::json!({ "success": true })).into_response()
@@ -884,7 +823,6 @@ async fn create_upload_record_http(
 #[derive(Deserialize)]
 struct UpdateUploadStatusRequest {
     file_name: String,
-    timestamp: i64,
     status: String,
 }
 
@@ -894,16 +832,7 @@ async fn update_upload_status_http(
 ) -> impl IntoResponse {
     println!("[Web Server] 更新上传状态: {} -> {}", payload.file_name, payload.status);
     
-    let result = sqlx::query(
-        "UPDATE messages SET file_status = ? WHERE sender_id = 'me' AND content = ? AND timestamp = ?"
-    )
-    .bind(&payload.status)
-    .bind(&payload.file_name)
-    .bind(payload.timestamp)
-    .execute(&state.pool)
-    .await;
-    
-    match result {
+    match crate::db::update_upload_status(&state.pool, payload.file_name.clone(), payload.status.clone()).await {
         Ok(_) => {
             println!("[Web Server] ✓ 上传状态已更新");
             Json(serde_json::json!({ "success": true })).into_response()
@@ -931,15 +860,7 @@ async fn delete_upload_record_http(
 ) -> impl IntoResponse {
     println!("[Web Server] 删除上传记录: {}", payload.file_name);
     
-    let result = sqlx::query(
-        "DELETE FROM messages WHERE sender_id = 'me' AND content = ? AND timestamp = ? AND file_status = 'uploading'"
-    )
-    .bind(&payload.file_name)
-    .bind(payload.timestamp)
-    .execute(&state.pool)
-    .await;
-    
-    match result {
+    match crate::db::delete_upload_record(&state.pool, payload.file_name.clone(), payload.timestamp).await {
         Ok(_) => {
             println!("[Web Server] ✓ 上传记录已删除");
             Json(serde_json::json!({ "success": true })).into_response()
@@ -1045,11 +966,7 @@ async fn save_current_theme_http(
 ) -> impl IntoResponse {
     println!("[Web Server] 收到保存主题请求: {}", req.theme_name);
     
-    match sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('current_theme', ?)")
-        .bind(&req.theme_name)
-        .execute(&state.pool)
-        .await
-    {
+    match crate::db::save_current_theme(&state.pool, req.theme_name.clone()).await {
         Ok(_) => {
             println!("[Web Server] 主题设置已保存: {}", req.theme_name);
             Json(serde_json::json!({"success": true})).into_response()
@@ -1069,10 +986,7 @@ async fn save_current_theme_http(
 async fn get_current_theme_http(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     println!("[Web Server] 收到获取当前主题请求");
     
-    match sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = 'current_theme'")
-        .fetch_optional(&state.pool)
-        .await
-    {
+    match crate::db::get_current_theme(&state.pool).await {
         Ok(result) => {
             let theme = result.unwrap_or_else(|| "default".to_string());
             println!("[Web Server] 当前主题: {}", theme);

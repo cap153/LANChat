@@ -82,18 +82,7 @@ pub async fn send_message(
     crate::network::messaging::send_text_message(&peer_addr, my_id, my_name, content.clone()).await?;
     
     // 保存到数据库(标记为自己发送的)
-    sqlx::query(
-        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp) VALUES ('me', ?, ?, 'text', ?)"
-    )
-    .bind(&peer_id)  // 接收者ID
-    .bind(&content)
-    .bind(std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64)
-    .execute(&state.pool)
-    .await
-    .map_err(|e| format!("保存消息失败: {}", e))?;
+    crate::db::save_text_message(&state.pool, peer_id, content).await?;
     
     Ok(())
 }
@@ -191,24 +180,15 @@ pub async fn send_file(
     };
     
     // 立即创建数据库记录（状态为 uploading）
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
-    
-    let result = sqlx::query(
-        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, ?, 'file', ?, ?, 'uploading')"
-    )
-    .bind(&peer_id)      // 接收者ID
-    .bind(&file_name)
-    .bind(timestamp)
-    .bind(&file_path)
-    .execute(&state.pool)
-    .await;
-    
-    let message_id = match result {
-        Ok(res) => {
-            let id = res.last_insert_rowid();
+    let message_id = match crate::db::save_file_message(
+        &state.pool,
+        peer_id.clone(),
+        file_name.clone(),
+        file_size,
+        file_path.clone(),
+        "uploading".to_string(),
+    ).await {
+        Ok(id) => {
             println!("[Command] ✓ 已创建上传中记录，ID: {}", id);
             Some(id)
         }
@@ -252,10 +232,7 @@ pub async fn send_file(
             if let Some(id) = message_id {
                 let pool = state.pool.clone();
                 tokio::spawn(async move {
-                    let _ = sqlx::query("DELETE FROM messages WHERE id = ?")
-                        .bind(id)
-                        .execute(&pool)
-                        .await;
+                    let _ = crate::db::delete_message_by_id(&pool, id).await;
                 });
             }
             format!("上传失败: {}", e)
@@ -270,10 +247,7 @@ pub async fn send_file(
         
         // 删除失败的数据库记录
         if let Some(id) = message_id {
-            let _ = sqlx::query("DELETE FROM messages WHERE id = ?")
-                .bind(id)
-                .execute(&state.pool)
-                .await;
+            let _ = crate::db::delete_message_by_id(&state.pool, id).await;
         }
         
         return Err(format!("上传失败: HTTP {} - {}", status, error_text));
@@ -286,12 +260,7 @@ pub async fn send_file(
     
     // 更新数据库状态为 "sent"
     if let Some(id) = message_id {
-        if let Err(e) = sqlx::query(
-            "UPDATE messages SET file_status = 'sent' WHERE id = ?"
-        )
-        .bind(id)
-        .execute(&state.pool)
-        .await {
+        if let Err(e) = crate::db::update_file_status_by_id(&state.pool, id, "sent").await {
             eprintln!("[Command] ⚠ 更新数据库状态失败: {}", e);
         } else {
             println!("[Command] ✓ 文件状态已更新为 sent");
@@ -393,11 +362,7 @@ pub async fn save_current_theme(state: State<'_, DbState>, theme_name: String) -
     println!("[Command] 收到前端请求: save_current_theme, 主题: {}", theme_name);
     
     // 保存当前主题到数据库
-    sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('current_theme', ?)")
-        .bind(&theme_name)
-        .execute(&state.pool)
-        .await
-        .map_err(|e| format!("保存主题设置失败: {}", e))?;
+    crate::db::save_current_theme(&state.pool, theme_name.clone()).await?;
     
     println!("[Command] 主题设置已保存: {}", theme_name);
     Ok(())
@@ -407,10 +372,7 @@ pub async fn save_current_theme(state: State<'_, DbState>, theme_name: String) -
 pub async fn get_current_theme(state: State<'_, DbState>) -> Result<String, String> {
     println!("[Command] 收到前端请求: get_current_theme");
     
-    let result = sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = 'current_theme'")
-        .fetch_optional(&state.pool)
-        .await
-        .map_err(|e| format!("查询主题设置失败: {}", e))?;
+    let result = crate::db::get_current_theme(&state.pool).await?;
     
     let theme = result.unwrap_or_else(|| "default".to_string());
     println!("[Command] 当前主题: {}", theme);
@@ -467,52 +429,13 @@ pub async fn save_file_message(
     println!("[Command] 收到前端请求: save_file_message");
     println!("[Command] 文件: {}, 大小: {}, 状态: {}", file_name, file_size, status);
     
-    // 检查是否存在相同文件名和状态为 uploading 的消息
-    let existing = sqlx::query_as::<_, (i64,)>(
-        "SELECT id FROM messages WHERE receiver_id = ? AND content = ? AND msg_type = 'file' AND file_status = 'uploading' ORDER BY id DESC LIMIT 1"
-    )
-    .bind(&peer_id)
-    .bind(&file_name)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| format!("查询消息失败: {}", e))?;
-    
-    if let Some((msg_id,)) = existing {
-        // 更新现有的 uploading 消息
-        println!("[Command] 更新现有消息 ID: {}, 状态: {} -> {}", msg_id, "uploading", status);
-        sqlx::query(
-            "UPDATE messages SET file_path = ?, file_status = ? WHERE id = ?"
-        )
-        .bind(&file_path)
-        .bind(&status)
-        .bind(msg_id)
-        .execute(&state.pool)
-        .await
-        .map_err(|e| format!("更新消息失败: {}", e))?;
-        
-        println!("[Command] 消息已更新");
-        Ok(msg_id)
-    } else {
-        // 插入新消息
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64;
-        
-        let result = sqlx::query(
-            "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES ('me', ?, ?, 'file', ?, ?, ?)"
-        )
-        .bind(&peer_id)
-        .bind(&file_name)
-        .bind(timestamp)
-        .bind(&file_path)
-        .bind(&status)
-        .execute(&state.pool)
-        .await
-        .map_err(|e| format!("保存消息失败: {}", e))?;
-        
-        let msg_id = result.last_insert_rowid();
-        println!("[Command] 新消息已保存，ID: {}", msg_id);
-        Ok(msg_id)
-    }
+    // 使用数据库层的函数
+    crate::db::save_file_message(
+        &state.pool,
+        peer_id,
+        file_name,
+        file_size,
+        file_path,
+        status,
+    ).await
 }
