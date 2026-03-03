@@ -3,6 +3,7 @@ use crate::db::DbState;
 use crate::peers::{Peer, PeerManager};
 use std::sync::Arc;
 use tauri::State;
+use tokio::io::AsyncReadExt;
 
 // 用于管理 PeerManager 的状态
 pub struct PeerState {
@@ -110,7 +111,7 @@ pub async fn send_file(
     println!("[Command] 文件路径类型: {}", if is_content_uri { "content URI" } else { "普通路径" });
     
     // 获取文件名和大小
-    let (file_name, file_size, file_data) = if is_content_uri {
+    let (file_name, file_size) = if is_content_uri {
         // Android content URI 处理 - 使用 Tauri 的 fs 插件
         println!("[Command] 处理 Android content URI: {}", file_path);
         
@@ -133,30 +134,16 @@ pub async fn send_file(
         
         println!("[Command] 提取的文件名: {}", file_name);
         
-        // 读取文件内容
-        // 对于 Android content URI，tokio::fs::read 可能无法直接读取
-        // 我们需要特殊处理
-        let data = match tokio::fs::read(&file_path).await {
-            Ok(d) => {
-                println!("[Command] 成功读取文件");
-                d
-            }
+        // 获取文件大小
+        let size = match tokio::fs::metadata(&file_path).await {
+            Ok(metadata) => metadata.len() as usize,
             Err(e) => {
-                println!("[Command] 标准读取失败: {}, 尝试其他方法", e);
-                
-                // 对于 Android content URI，返回更详细的错误信息
-                return Err(format!(
-                    "读取文件失败: {}. 路径: {}. \
-                    Android content URI 需要特殊处理，请确保文件可访问。",
-                    e, file_path
-                ));
+                println!("[Command] 无法获取文件大小: {}", e);
+                0
             }
         };
         
-        let size = data.len();
-        println!("[Command] 成功读取文件，大小: {} 字节", size);
-        
-        (file_name, size, data)
+        (file_name, size)
     } else {
         // 普通文件路径处理
         let file_name = std::path::Path::new(&file_path)
@@ -171,12 +158,7 @@ pub async fn send_file(
         
         println!("[Command] 文件: {}, 大小: {} 字节", file_name, file_size);
         
-        // 读取文件
-        let file_data = tokio::fs::read(&file_path)
-            .await
-            .map_err(|e| format!("读取文件失败: {}", e))?;
-        
-        (file_name, file_size, file_data)
+        (file_name, file_size)
     };
     
     // 立即创建数据库记录（状态为 uploading）
@@ -198,65 +180,106 @@ pub async fn send_file(
         }
     };
     
-    // 构造 multipart 请求
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(300))  // 增加超时时间到 5 分钟
-        .build()
-        .map_err(|e| format!("创建客户端失败: {}", e))?;
-    
     // 获取自己的 ID（发送者 ID）
     let my_id = crate::db::get_user_id(&state.pool).await?;
     
-    let form = reqwest::multipart::Form::new()
-        .text("peer_id", my_id.clone())  // 传递发送者的 ID
-        .part(
-            "file",
-            reqwest::multipart::Part::bytes(file_data.clone())
-                .file_name(file_name.clone())
-                .mime_str("application/octet-stream")
-                .map_err(|e| format!("设置 MIME 类型失败: {}", e))?
-        );
+    // 分块上传
+    let chunk_size = 50 * 1024 * 1024; // 50MB 分块
+    let total_chunks = (file_size + chunk_size - 1) / chunk_size;
+    
+    println!("[Command] 开始分块上传: 文件大小={}, 分块大小={}, 总分块数={}", 
+             file_size, chunk_size, total_chunks);
+    
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|e| format!("创建客户端失败: {}", e))?;
     
     let upload_url = format!("http://{}/api/upload", peer_addr);
-    println!("[Command] 上传到: {}", upload_url);
-    println!("[Command] sender_id (我的ID): {}", my_id);
-    println!("[Command] 文件名: {}", file_name);
     
-    let response = client
-        .post(&upload_url)
-        .multipart(form)
-        .send()
+    // 打开文件进行流式读取
+    let mut file = tokio::fs::File::open(&file_path)
         .await
-        .map_err(|e| {
-            // 删除失败的数据库记录
-            if let Some(id) = message_id {
-                let pool = state.pool.clone();
-                tokio::spawn(async move {
-                    let _ = crate::db::delete_message_by_id(&pool, id).await;
-                });
-            }
-            format!("上传失败: {}", e)
-        })?;
+        .map_err(|e| format!("打开文件失败: {}", e))?;
     
-    let status = response.status();
-    println!("[Command] 响应状态: {}", status);
+    let mut offset = 0;
+    let mut chunk_index = 0;
+    let start_time = std::time::Instant::now();
     
-    if !status.is_success() {
-        let error_text = response.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
-        eprintln!("[Command] 错误响应: {}", error_text);
+    loop {
+        // 读取分块
+        let mut buf = vec![0u8; chunk_size];
+        let n = tokio::io::AsyncReadExt::read(&mut file, &mut buf)
+            .await
+            .map_err(|e| format!("读取文件失败: {}", e))?;
         
-        // 删除失败的数据库记录
-        if let Some(id) = message_id {
-            let _ = crate::db::delete_message_by_id(&state.pool, id).await;
+        if n == 0 {
+            break; // 文件读取完毕
         }
         
-        return Err(format!("上传失败: HTTP {} - {}", status, error_text));
+        buf.truncate(n);
+        
+        // 构造 multipart 请求
+        let form = reqwest::multipart::Form::new()
+            .text("peer_id", my_id.clone())
+            .text("file_name", file_name.clone())
+            .text("file_size", file_size.to_string())
+            .text("chunk_index", chunk_index.to_string())
+            .text("chunk_total", total_chunks.to_string())
+            .part(
+                "chunk",
+                reqwest::multipart::Part::bytes(buf.clone())
+                    .mime_str("application/octet-stream")
+                    .map_err(|e| format!("设置 MIME 类型失败: {}", e))?
+            );
+        
+        println!("[Command] 上传分块 {}/{}, 大小: {} 字节", 
+                 chunk_index + 1, total_chunks, n);
+        
+        let response = client
+            .post(&upload_url)
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| {
+                // 删除失败的数据库记录
+                if let Some(id) = message_id {
+                    let pool = state.pool.clone();
+                    tokio::spawn(async move {
+                        let _ = crate::db::delete_message_by_id(&pool, id).await;
+                    });
+                }
+                format!("上传分块失败: {}", e)
+            })?;
+        
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
+            eprintln!("[Command] ✗ 上传分块失败: {}", error_text);
+            
+            // 删除失败的数据库记录
+            if let Some(id) = message_id {
+                let _ = crate::db::delete_message_by_id(&state.pool, id).await;
+            }
+            
+            return Err(format!("上传分块失败: {}", error_text));
+        }
+        
+        offset += n;
+        chunk_index += 1;
+        
+        // 打印进度
+        let elapsed = start_time.elapsed().as_secs_f64();
+        if elapsed > 0.0 {
+            let speed = offset as f64 / (1024.0 * 1024.0) / elapsed;
+            println!("[Command] 已上传: {} MB, 速度: {:.2} MB/s", 
+                     offset / (1024 * 1024), speed);
+        }
     }
     
-    let result: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("解析响应失败: {}", e))?;
+    let total_time = start_time.elapsed().as_secs_f64();
+    let avg_speed = file_size as f64 / (1024.0 * 1024.0) / total_time;
+    println!("[Command] ✓ 文件上传完成，耗时: {:.2}s, 平均速度: {:.2} MB/s", 
+             total_time, avg_speed);
     
     // 更新数据库状态为 "sent"
     if let Some(id) = message_id {
@@ -272,7 +295,6 @@ pub async fn send_file(
     // 返回文件信息
     Ok(serde_json::json!({
         "success": true,
-        "file_id": result.get("file_id").and_then(|v| v.as_str()).unwrap_or(""),
         "file_name": file_name,
         "file_size": file_size,
     }))

@@ -305,6 +305,51 @@ async function apiGetChatHistory(peerId) {
 
 
 // 发送文件
+// 获取设备可用内存（估算）
+function getAvailableMemory() {
+    if (navigator.deviceMemory) {
+        // 使用 Device Memory API（如果可用）
+        return navigator.deviceMemory * 1024 * 1024 * 1024; // 转换为字节
+    }
+    // 默认估算：假设设备有 2GB 内存
+    return 2 * 1024 * 1024 * 1024;
+}
+
+// 根据设备内存和文件大小计算最优分块大小
+function calculateOptimalChunkSize(fileSize) {
+    const availableMemory = getAvailableMemory();
+    // 使用可用内存的 10-20%（保留空间给其他操作）
+    const maxChunkMemory = availableMemory * 0.15;
+    
+    // 根据文件大小选择分块策略
+    let baseChunkSize;
+    if (fileSize < 100 * 1024 * 1024) {
+        // < 100MB：5MB 分块
+        baseChunkSize = 5 * 1024 * 1024;
+    } else if (fileSize < 500 * 1024 * 1024) {
+        // 100-500MB：10MB 分块
+        baseChunkSize = 10 * 1024 * 1024;
+    } else if (fileSize < 1024 * 1024 * 1024) {
+        // 500MB-1GB：20MB 分块
+        baseChunkSize = 20 * 1024 * 1024;
+    } else if (fileSize < 5 * 1024 * 1024 * 1024) {
+        // 1-5GB：50MB 分块
+        baseChunkSize = 50 * 1024 * 1024;
+    } else {
+        // > 5GB：100MB 分块
+        baseChunkSize = 100 * 1024 * 1024;
+    }
+    
+    // 根据可用内存调整分块大小（不超过可用内存的 15%）
+    const chunkSize = Math.min(baseChunkSize, Math.floor(maxChunkMemory));
+    
+    console.log("[JS-API] 设备内存:", Math.round(availableMemory / (1024 * 1024 * 1024)), "GB");
+    console.log("[JS-API] 可用内存预算:", Math.round(maxChunkMemory / (1024 * 1024)), "MB");
+    console.log("[JS-API] 计算的分块大小:", Math.round(chunkSize / (1024 * 1024)), "MB");
+    
+    return chunkSize;
+}
+
 async function apiSendFile(peerId, peerAddr, file) {
     const tauri = getTauri();
     
@@ -389,18 +434,8 @@ async function apiSendFile(peerId, peerAddr, file) {
                     console.error("[JS-API] ✗ 保存上传中消息失败:", saveError);
                 }
                 
-                // 动态调整分块大小：根据文件大小自动选择
-                let chunkSize;
-                if (fileSize < 100 * 1024 * 1024) {
-                    chunkSize = 5 * 1024 * 1024;
-                } else if (fileSize < 500 * 1024 * 1024) {
-                    chunkSize = 10 * 1024 * 1024;
-                } else if (fileSize < 1024 * 1024 * 1024) {
-                    chunkSize = 20 * 1024 * 1024;
-                } else {
-                    chunkSize = 50 * 1024 * 1024;
-                }
-                console.log("[JS-API] 动态分块大小:", chunkSize / (1024 * 1024), "MB");
+                // 根据设备内存和文件大小计算最优分块大小
+                const chunkSize = calculateOptimalChunkSize(fileSize);
                 
                 // 第一步：获取自己的 ID
                 console.log("[JS-API] ========== 第一步：获取用户ID ==========");
@@ -513,38 +548,82 @@ async function apiSendFile(peerId, peerAddr, file) {
             throw new Error("发送失败: " + e.message);
         }
     } else {
-        // Web 端 - 通过 HTTP 上传
+        // Web 端 - 通过 HTTP 上传（使用分块协议）
         try {
             // 获取自己的 ID（发送者 ID）
             const myId = await apiGetMyId();
             
-            const formData = new FormData();
-            formData.append('peer_id', myId);  // 传递发送者的 ID（必须在 file 之前）
-            formData.append('file', file);
+            const fileName = file.name;
+            const fileSize = file.size;
             
-            // 上传到对方的服务器
-            const uploadUrl = `http://${peerAddr}/api/upload`;
-            console.log("[JS-API] 上传文件到:", uploadUrl);
-            console.log("[JS-API] 文件信息:", file.name, file.size, file.type);
+            console.log("[JS-API] Web 端分块上传");
+            console.log("[JS-API] 文件信息:", fileName, fileSize, "字节");
             console.log("[JS-API] sender_id (我的ID):", myId);
             
-            const resp = await fetch(uploadUrl, {
-                method: 'POST',
-                body: formData,
-                mode: 'cors',
-            });
+            // 计算分块大小（Web 端使用 10MB 分块）
+            const chunkSize = 10 * 1024 * 1024;
+            const totalChunks = Math.ceil(fileSize / chunkSize);
             
-            console.log("[JS-API] 响应状态:", resp.status, resp.statusText);
+            console.log("[JS-API] 分块大小:", chunkSize / (1024 * 1024), "MB, 总分块数:", totalChunks);
             
-            if (!resp.ok) {
-                const errorText = await resp.text();
-                console.error("[JS-API] 错误响应:", errorText);
-                throw new Error(`HTTP ${resp.status}: ${errorText}`);
+            const uploadUrl = `http://${peerAddr}/api/upload`;
+            console.log("[JS-API] 上传地址:", uploadUrl);
+            
+            let offset = 0;
+            let chunkIndex = 0;
+            const startTime = Date.now();
+            let lastLogTime = startTime;
+            
+            while (offset < fileSize) {
+                const size = Math.min(chunkSize, fileSize - offset);
+                const chunk = file.slice(offset, offset + size);
+                
+                // 构造 FormData 上传这一块
+                const formData = new FormData();
+                formData.append('peer_id', myId);
+                formData.append('file_name', fileName);
+                formData.append('file_size', fileSize.toString());
+                formData.append('chunk_index', chunkIndex.toString());
+                formData.append('chunk_total', totalChunks.toString());
+                formData.append('chunk', chunk, 'chunk');
+                
+                console.log("[JS-API] 上传分块", chunkIndex + 1, "大小:", size, "字节");
+                
+                const resp = await fetch(uploadUrl, {
+                    method: 'POST',
+                    body: formData,
+                    mode: 'cors',
+                });
+                
+                if (!resp.ok) {
+                    const errorText = await resp.text();
+                    console.error("[JS-API] ✗ 上传分块失败，状态码:", resp.status);
+                    console.error("[JS-API] ✗ 错误响应:", errorText);
+                    throw new Error(`HTTP ${resp.status}: ${errorText}`);
+                }
+                
+                offset += size;
+                chunkIndex++;
+                
+                // 每秒打印一次进度
+                const now = Date.now();
+                if (now - lastLogTime > 1000) {
+                    const elapsed = (now - startTime) / 1000;
+                    const speed = offset / (1024 * 1024) / elapsed;
+                    console.log("[JS-API] 已上传:", Math.round(offset / 1024 / 1024), "MB, 速度:", Math.round(speed), "MB/s");
+                    lastLogTime = now;
+                }
             }
             
-            const data = await resp.json();
-            console.log("[JS-API] 文件上传成功:", data);
-            return data;
+            const totalTime = (Date.now() - startTime) / 1000;
+            const avgSpeed = (fileSize / (1024 * 1024)) / totalTime;
+            console.log("[JS-API] ✓ 文件上传完成，共", chunkIndex, "块，耗时:", totalTime.toFixed(2), "秒，平均速度:", avgSpeed.toFixed(2), "MB/s");
+            
+            return {
+                success: true,
+                file_name: fileName,
+                file_size: fileSize,
+            };
         } catch (e) {
             console.error("[JS-API] 文件上传失败:", e);
             throw new Error("上传失败: " + e.message);
