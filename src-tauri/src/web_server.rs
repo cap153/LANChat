@@ -378,8 +378,6 @@ async fn save_message_to_db(
     Ok(())
 }
 
-
-// 上传文件 - 流式处理，避免大文件内存溢出
 async fn upload_file_http(
     State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
@@ -389,8 +387,10 @@ async fn upload_file_http(
     let mut sender_id = String::new();
     let mut file_name = String::new();
     let mut file_size: u64 = 0;
-    let mut file_path: Option<std::path::PathBuf> = None;
-    let mut message_id: Option<i64> = None;
+    let mut chunk_index: usize = 0;
+    let mut chunk_total: usize = 0;
+    let mut _file_path: Option<std::path::PathBuf> = None;
+    let mut chunk_data: Option<Vec<u8>> = None;
     
     // 获取下载目录
     let download_dir = get_download_dir(&state.pool).await;
@@ -402,7 +402,6 @@ async fn upload_file_http(
     println!("[Web Server] 开始解析 multipart 字段");
     while let Some(mut field) = multipart.next_field().await.ok().flatten() {
         let field_name = field.name().map(|s| s.to_string()).unwrap_or_default();
-        println!("[Web Server] 解析字段: {}", field_name);
         
         match field_name.as_str() {
             "peer_id" => {
@@ -411,137 +410,37 @@ async fn upload_file_http(
                     println!("[Web Server] sender_id (发送者): {}", sender_id);
                 }
             }
-            "file" => {
-                file_name = field.file_name()
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| "unknown".to_string());
-                println!("[Web Server] 文件名: {}", file_name);
-                
-                // 验证必需字段
-                if sender_id.is_empty() {
-                    eprintln!("[Web Server] ✗ peer_id 字段必须在 file 字段之前");
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        Json(ErrorResponse { 
-                            error: "peer_id 字段必须在 file 字段之前".to_string() 
-                        }),
-                    ).into_response();
+            "file_name" => {
+                if let Ok(text) = field.text().await {
+                    file_name = text;
+                    println!("[Web Server] 文件名: {}", file_name);
                 }
-                
-                // 创建数据库记录（状态为 downloading）
-                let timestamp = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs() as i64;
-                
-                let result = sqlx::query(
-                    "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES (?, ?, ?, 'file', ?, '', 'downloading')"
-                )
-                .bind(&sender_id)
-                .bind(&crate::db::get_user_id(&state.pool).await.unwrap_or_else(|_| "unknown".to_string()))  // 接收者ID（当前用户）
-                .bind(&file_name)
-                .bind(timestamp)
-                .execute(&state.pool)
-                .await;
-                
-                message_id = match result {
-                    Ok(res) => {
-                        let id = res.last_insert_rowid();
-                        println!("[Web Server] ✓ 已创建下载中记录，ID: {}", id);
-                        
-                        // 发送 Tauri 事件通知前端（桌面端）
-                        #[cfg(feature = "desktop")]
-                        if let Some(ref app) = state.app_handle {
-                            use tauri::Emitter;
-                            let _ = app.emit("new-message", serde_json::json!({
-                                "from_id": sender_id,
-                                "from_name": "Unknown",
-                                "content": file_name.clone(),
-                                "timestamp": timestamp,
-                                "msg_type": "file",
-                                "file_name": file_name.clone(),
-                                "file_status": "downloading",
-                            }));
-                            println!("[Web Server] ✓ Tauri 事件已发送 (downloading)");
-                        }
-                        
-                        Some(id)
-                    }
-                    Err(e) => {
-                        eprintln!("[Web Server] ✗ 创建下载记录失败: {}", e);
-                        None
-                    }
-                };
-                
-                // 流式写入文件
-                let path = download_dir.join(&file_name);
-                file_path = Some(path.clone());
-                println!("[Web Server] 流式保存文件到: {:?}", path);
-                
-                let file = match tokio::fs::File::create(&path).await {
-                    Ok(f) => f,
-                    Err(e) => {
-                        eprintln!("[Web Server] ✗ 创建文件失败: {}", e);
-                        
-                        // 删除失败的数据库记录
-                        if let Some(id) = message_id {
-                            let _ = sqlx::query("DELETE FROM messages WHERE id = ?")
-                                .bind(id)
-                                .execute(&state.pool)
-                                .await;
-                        }
-                        
-                        return (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(ErrorResponse { 
-                                error: format!("创建文件失败: {}", e) 
-                            }),
-                        ).into_response();
-                    }
-                };
-                
-                let mut writer = tokio::io::BufWriter::new(file);
-                let mut chunk_count = 0;
-                
-                // 流式读取并写入
+            }
+            "file_size" => {
+                if let Ok(text) = field.text().await {
+                    file_size = text.parse().unwrap_or(0);
+                    println!("[Web Server] 文件总大小: {}", file_size);
+                }
+            }
+            "chunk_index" => {
+                if let Ok(text) = field.text().await {
+                    chunk_index = text.parse().unwrap_or(0);
+                }
+            }
+            "chunk_total" => {
+                if let Ok(text) = field.text().await {
+                    chunk_total = text.parse().unwrap_or(0);
+                    println!("[Web Server] 分块信息: {}/{}", chunk_index + 1, chunk_total);
+                }
+            }
+            "chunk" => {
+                // 读取分块数据
+                let mut data = Vec::new();
                 while let Ok(Some(chunk)) = field.chunk().await {
-                    file_size += chunk.len() as u64;
-                    chunk_count += 1;
-                    
-                    // 每 100MB 打印一次进度
-                    if file_size % (100 * 1024 * 1024) < chunk.len() as u64 {
-                        println!("[Web Server] 已接收: {} MB", file_size / (1024 * 1024));
-                    }
-                    
-                    if let Err(e) = tokio::io::AsyncWriteExt::write_all(&mut writer, &chunk).await {
-                        eprintln!("[Web Server] ✗ 写入文件失败: {}", e);
-                        
-                        // 删除失败的数据库记录和文件
-                        if let Some(id) = message_id {
-                            let _ = sqlx::query("DELETE FROM messages WHERE id = ?")
-                                .bind(id)
-                                .execute(&state.pool)
-                                .await;
-                        }
-                        let _ = tokio::fs::remove_file(&path).await;
-                        
-                        return (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(ErrorResponse { 
-                                error: format!("写入文件失败: {}", e) 
-                            }),
-                        ).into_response();
-                    }
+                    data.extend_from_slice(&chunk);
                 }
-                
-                println!("[Web Server] 接收完成，共 {} 个数据块", chunk_count);
-                
-                // 刷新缓冲区
-                if let Err(e) = tokio::io::AsyncWriteExt::flush(&mut writer).await {
-                    eprintln!("[Web Server] ✗ 刷新缓冲区失败: {}", e);
-                }
-                
-                println!("[Web Server] ✓ 文件已保存，大小: {} 字节", file_size);
+                chunk_data = Some(data);
+                println!("[Web Server] 收到分块数据，大小: {} 字节", chunk_data.as_ref().map(|d| d.len()).unwrap_or(0));
             }
             _ => {
                 println!("[Web Server] 忽略未知字段: {}", field_name);
@@ -550,75 +449,196 @@ async fn upload_file_http(
     }
     
     // 验证必需字段
-    if file_name.is_empty() || file_size == 0 {
-        eprintln!("[Web Server] 文件验证失败: file_name={}, size={}", 
-                  file_name, file_size);
+    // 第一块需要所有字段，后续块只需要 chunk_index 和 chunk
+    println!("[Web Server] 验证字段: file_name={}, chunk_index={}, chunk_total={}, has_chunk={}", 
+             file_name, chunk_index, chunk_total, chunk_data.is_some());
+    
+    if chunk_data.is_none() {
+        eprintln!("[Web Server] ✗ 缺少 chunk 数据");
         return (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse { 
-                error: format!("缺少文件或文件为空 (name={}, size={})", file_name, file_size) 
+                error: "缺少 chunk 数据".to_string() 
             }),
         ).into_response();
     }
     
-    let file_id = uuid::Uuid::new_v4().to_string();
-    let file_status = "accepted";
+    if chunk_index == 0 && file_name.is_empty() {
+        eprintln!("[Web Server] ✗ 第一块缺少 file_name");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse { 
+                error: "第一块缺少 file_name".to_string() 
+            }),
+        ).into_response();
+    }
     
-    println!("[Web Server] ========== 文件接收完成 ==========");
-    println!("[Web Server] 文件名: {}", file_name);
-    println!("[Web Server] 文件大小: {} 字节", file_size);
-    println!("[Web Server] 发送者 ID: {}", sender_id);
-    println!("[Web Server] 文件状态: {}", file_status);
-    println!("[Web Server] ==========================================");
+    // 对于后续块，如果 file_name 为空，从数据库查询
+    if chunk_index > 0 && file_name.is_empty() {
+        println!("[Web Server] 第 {} 块，file_name 为空，从数据库查询 (sender_id={})", chunk_index + 1, sender_id);
+        // 从数据库查询该发送者最近的 downloading 状态的文件
+        if let Ok(Some(row)) = sqlx::query("SELECT content FROM messages WHERE sender_id = ? AND msg_type = 'file' AND file_status = 'downloading' ORDER BY id DESC LIMIT 1")
+            .bind(&sender_id)
+            .fetch_optional(&state.pool)
+            .await
+        {
+            use sqlx::Row;
+            file_name = row.get("content");
+            println!("[Web Server] 从数据库查询到文件名: {} (sender_id={})", file_name, sender_id);
+        } else {
+            eprintln!("[Web Server] ✗ 无法确定文件名 (sender_id={})", sender_id);
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse { 
+                    error: "无法确定文件名".to_string() 
+                }),
+            ).into_response();
+        }
+    }
     
-    // 更新数据库状态为 accepted
-    if let Some(id) = message_id {
-        if let Some(ref path) = file_path {
-            if let Err(e) = sqlx::query(
-                "UPDATE messages SET file_path = ?, file_status = ? WHERE id = ?"
-            )
-            .bind(path.to_str().unwrap())
-            .bind(file_status)
-            .bind(id)
-            .execute(&state.pool)
-            .await {
-                eprintln!("[Web Server] ✗ 更新数据库失败: {}", e);
-            } else {
-                println!("[Web Server] ✓ 文件记录已更新到数据库");
+    let chunk_data = chunk_data.unwrap();
+    let path = download_dir.join(&file_name);
+    
+    // 第一块时创建文件
+    if chunk_index == 0 {
+        _file_path = Some(path.clone());
+        println!("[Web Server] 创建新文件: {:?}", path);
+        
+        // 删除旧文件（如果存在）
+        let _ = tokio::fs::remove_file(&path).await;
+    }
+    
+    // 以追加模式打开文件并写入
+    let file = match tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .await
+    {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("[Web Server] ✗ 打开文件失败: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { 
+                    error: format!("打开文件失败: {}", e) 
+                }),
+            ).into_response();
+        }
+    };
+    
+    let mut writer = tokio::io::BufWriter::new(file);
+    
+    // 写入分块数据
+    if let Err(e) = tokio::io::AsyncWriteExt::write_all(&mut writer, &chunk_data).await {
+        eprintln!("[Web Server] ✗ 写入文件失败: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { 
+                error: format!("写入文件失败: {}", e) 
+            }),
+        ).into_response();
+    }
+    
+    // 刷新缓冲区
+    if let Err(e) = tokio::io::AsyncWriteExt::flush(&mut writer).await {
+        eprintln!("[Web Server] ✗ 刷新缓冲区失败: {}", e);
+    }
+    
+    println!("[Web Server] ✓ 分块 {}/{} 已保存，大小: {} 字节", chunk_index + 1, chunk_total, chunk_data.len());
+    
+    // 只在第一块时创建数据库记录
+    if chunk_index == 0 && !file_name.is_empty() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        
+        let result = sqlx::query(
+            "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES (?, ?, ?, 'file', ?, ?, 'downloading')"
+        )
+        .bind(&sender_id)
+        .bind(&crate::db::get_user_id(&state.pool).await.unwrap_or_else(|_| "unknown".to_string()))
+        .bind(&file_name)
+        .bind(timestamp)
+        .bind(path.to_str().unwrap_or(""))
+        .execute(&state.pool)
+        .await;
+        
+        match result {
+            Ok(_) => {
+                println!("[Web Server] ✓ 文件接收开始，已保存到数据库");
+                
+                // 发送 Tauri 事件通知前端（桌面端）
+                #[cfg(feature = "desktop")]
+                if let Some(ref app) = state.app_handle {
+                    use tauri::Emitter;
+                    let _ = app.emit("new-message", serde_json::json!({
+                        "from_id": sender_id,
+                        "from_name": "Unknown",
+                        "content": file_name.clone(),
+                        "timestamp": timestamp,
+                        "msg_type": "file",
+                        "file_name": file_name.clone(),
+                        "file_size": file_size,
+                        "file_status": "downloading",
+                    }));
+                    println!("[Web Server] ✓ Tauri 事件已发送 (downloading)");
+                }
+            }
+            Err(e) => {
+                eprintln!("[Web Server] ✗ 保存到数据库失败: {}", e);
             }
         }
     }
     
-    // 发送完成事件
-    #[cfg(feature = "desktop")]
-    if let Some(ref app) = state.app_handle {
-        use tauri::Emitter;
-        println!("[Web Server] 准备发送 Tauri 事件 ({})", file_status);
+    // 在最后一块时更新状态为 accepted
+    if chunk_index == chunk_total - 1 && !file_name.is_empty() {
+        let result = sqlx::query(
+            "UPDATE messages SET file_status = 'accepted' WHERE content = ? AND msg_type = 'file' AND file_status = 'downloading'"
+        )
+        .bind(&file_name)
+        .execute(&state.pool)
+        .await;
         
-        let _ = app.emit("new-message", serde_json::json!({
-            "from_id": sender_id,
-            "from_name": "Unknown",
-            "content": file_name.clone(),
-            "timestamp": std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64,
-            "msg_type": "file",
-            "file_id": file_id.clone(),
-            "file_name": file_name.clone(),
-            "file_size": file_size,
-            "file_status": file_status,
-        }));
-        
-        println!("[Web Server] ✓ Tauri 事件已发送 ({})", file_status);
+        match result {
+            Ok(_) => {
+                println!("[Web Server] ✓ 文件接收完成，状态已更新为 accepted");
+                
+                // 发送 Tauri 事件通知前端（桌面端）
+                #[cfg(feature = "desktop")]
+                if let Some(ref app) = state.app_handle {
+                    use tauri::Emitter;
+                    let timestamp = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() as i64;
+                    let _ = app.emit("new-message", serde_json::json!({
+                        "from_id": sender_id,
+                        "from_name": "Unknown",
+                        "content": file_name.clone(),
+                        "timestamp": timestamp,
+                        "msg_type": "file",
+                        "file_name": file_name.clone(),
+                        "file_size": file_size,
+                        "file_status": "accepted",
+                    }));
+                    println!("[Web Server] ✓ Tauri 事件已发送 (accepted)");
+                }
+            }
+            Err(e) => {
+                eprintln!("[Web Server] ✗ 更新数据库失败: {}", e);
+            }
+        }
     }
     
+    println!("[Web Server] ========== 文件上传处理完成 ==========");
     Json(serde_json::json!({
         "success": true,
-        "file_id": file_id,
         "file_name": file_name,
         "file_size": file_size,
-        "file_status": file_status,
+        "chunk_index": chunk_index,
+        "chunk_total": chunk_total,
     })).into_response()
 }
 

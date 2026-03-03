@@ -389,30 +389,33 @@ async function apiSendFile(peerId, peerAddr, file) {
                     console.error("[JS-API] ✗ 保存上传中消息失败:", saveError);
                 }
                 
-                // 第一步：完整读取文件到内存（分块读取，避免一次性加载到内存）
-                console.log("[JS-API] ========== 第一步：开始流式读取文件 ==========");
-                
                 // 动态调整分块大小：根据文件大小自动选择
                 let chunkSize;
                 if (fileSize < 100 * 1024 * 1024) {
-                    // 小于 100MB：使用 5MB 分块
                     chunkSize = 5 * 1024 * 1024;
                 } else if (fileSize < 500 * 1024 * 1024) {
-                    // 100MB - 500MB：使用 10MB 分块
                     chunkSize = 10 * 1024 * 1024;
                 } else if (fileSize < 1024 * 1024 * 1024) {
-                    // 500MB - 1GB：使用 20MB 分块
                     chunkSize = 20 * 1024 * 1024;
                 } else {
-                    // 大于 1GB：使用 50MB 分块
                     chunkSize = 50 * 1024 * 1024;
                 }
                 console.log("[JS-API] 动态分块大小:", chunkSize / (1024 * 1024), "MB");
                 
-                const chunks = [];
+                // 第一步：获取自己的 ID
+                console.log("[JS-API] ========== 第一步：获取用户ID ==========");
+                const myId = await apiGetMyId();
+                console.log("[JS-API] ✓ 第一步完成：用户ID:", myId);
+                
+                // 第二步：流式读取并分块上传
+                console.log("[JS-API] ========== 第二步：开始流式读取和上传 ==========");
+                const uploadUrl = `http://${peerAddr}/api/upload`;
+                console.log("[JS-API] 上传地址:", uploadUrl, "文件:", fileName, "大小:", fileSize, "字节");
+                
                 let offset = 0;
                 let chunkCount = 0;
                 const startTime = Date.now();
+                let lastLogTime = startTime;
                 
                 try {
                     const file = await tauri.fs.open(filePath, { read: true });
@@ -421,71 +424,58 @@ async function apiSendFile(peerId, peerAddr, file) {
                         const size = Math.min(chunkSize, fileSize - offset);
                         const buf = new Uint8Array(size);
                         await file.read(buf, { at: offset });
-                        chunks.push(buf);
+                        
+                        // 构造 FormData 上传这一块
+                        const formData = new FormData();
+                        // 重要：文本字段必须在文件字段之前
+                        formData.append('peer_id', myId);
+                        formData.append('file_name', fileName);
+                        formData.append('file_size', fileSize.toString());
+                        formData.append('chunk_index', chunkCount.toString());
+                        formData.append('chunk_total', Math.ceil(fileSize / chunkSize).toString());
+                        formData.append('chunk', new Blob([buf], { type: 'application/octet-stream' }), 'chunk');
+                        
+                        console.log("[JS-API] 上传分块", chunkCount + 1, "大小:", size, "字节");
+                        
+                        const resp = await fetch(uploadUrl, {
+                            method: 'POST',
+                            body: formData,
+                            mode: 'cors',
+                        });
+                        
+                        if (!resp.ok) {
+                            const errorText = await resp.text();
+                            console.error("[JS-API] ✗ 上传分块失败，状态码:", resp.status);
+                            console.error("[JS-API] ✗ 错误响应体:", errorText);
+                            console.error("[JS-API] ✗ 响应头:", resp.headers);
+                            throw new Error(`HTTP ${resp.status}: ${errorText}`);
+                        }
+                        
                         offset += size;
                         chunkCount++;
                         
-                        // 每 10 块或每 100MB 打印一次进度
-                        if (chunkCount % 10 === 0 || offset % (100 * 1024 * 1024) < size) {
-                            const elapsed = (Date.now() - startTime) / 1000;
+                        // 每秒打印一次进度
+                        const now = Date.now();
+                        if (now - lastLogTime > 1000) {
+                            const elapsed = (now - startTime) / 1000;
                             const speed = offset / (1024 * 1024) / elapsed;
-                            console.log("[JS-API] 已读取:", Math.round(offset / 1024 / 1024), "MB, 速度:", Math.round(speed), "MB/s");
+                            console.log("[JS-API] 已上传:", Math.round(offset / 1024 / 1024), "MB, 速度:", Math.round(speed), "MB/s");
+                            lastLogTime = now;
                         }
                     }
                     
                     await file.close();
                     const totalTime = (Date.now() - startTime) / 1000;
                     const avgSpeed = (offset / (1024 * 1024)) / totalTime;
-                    console.log("[JS-API] ✓ 第一步完成：文件读取完成，共", chunkCount, "块，总大小:", offset, "字节，耗时:", totalTime.toFixed(2), "秒，平均速度:", avgSpeed.toFixed(2), "MB/s");
+                    console.log("[JS-API] ✓ 第二步完成：文件上传完成，共", chunkCount, "块，总大小:", offset, "字节，耗时:", totalTime.toFixed(2), "秒，平均速度:", avgSpeed.toFixed(2), "MB/s");
                 } catch (error) {
-                    console.error("[JS-API] ✗ 第一步失败：流式读取失败:", error);
-                    throw new Error("文件读取失败: " + error.message);
+                    console.error("[JS-API] ✗ 第二步失败：流式上传失败:", error);
+                    throw new Error("文件上传失败: " + error.message);
                 }
                 
-                // 将所有块合并成 Blob
-                const fileBlob = new Blob(chunks, { type: 'application/octet-stream' });
-                console.log("[JS-API] Blob 创建完成，大小:", fileBlob.size, "字节");
-                
-                // 第二步：获取自己的 ID
-                console.log("[JS-API] ========== 第二步：获取用户ID ==========");
-                const myId = await apiGetMyId();
-                console.log("[JS-API] ✓ 第二步完成：用户ID:", myId);
-                
-                // 第三步：构造 FormData（使用 Blob）
-                console.log("[JS-API] ========== 第三步：构造FormData ==========");
-                const formData = new FormData();
-                formData.append('peer_id', myId);
-                formData.append('file', fileBlob, fileName);
-                console.log("[JS-API] ✓ 第三步完成：FormData已构造");
-                
-                // 第四步：上传到对方的服务器
-                console.log("[JS-API] ========== 第四步：上传文件 ==========");
-                const uploadUrl = `http://${peerAddr}/api/upload`;
-                console.log("[JS-API] 上传地址:", uploadUrl, "文件:", fileName, "大小:", fileSize, "字节");
-                
-                const uploadStartTime = Date.now();
-                const resp = await fetch(uploadUrl, {
-                    method: 'POST',
-                    body: formData,
-                    mode: 'cors',
-                });
-                
-                const uploadTime = (Date.now() - uploadStartTime) / 1000;
-                console.log("[JS-API] 响应状态:", resp.status, "上传耗时:", uploadTime.toFixed(2), "秒");
-                
-                if (!resp.ok) {
-                    const errorText = await resp.text();
-                    console.error("[JS-API] ✗ 第四步失败：上传失败:", errorText);
-                    throw new Error(`HTTP ${resp.status}: ${errorText}`);
-                }
-                
-                const result = await resp.json();
-                console.log("[JS-API] ✓ 第四步完成：文件上传成功");
-                
-                // 第五步：更新消息状态为已发送
-                console.log("[JS-API] ========== 第五步：更新消息状态 ==========");
+                // 第三步：更新消息状态为已发送
+                console.log("[JS-API] ========== 第三步：更新消息状态 ==========");
                 try {
-                    // 调用后端更新消息状态
                     await tauri.core.invoke('save_file_message', {
                         peerId: peerId,
                         fileName: fileName,
@@ -494,16 +484,15 @@ async function apiSendFile(peerId, peerAddr, file) {
                         status: 'sent'
                     });
                     
-                    console.log("[JS-API] ✓ 第五步完成：文件消息状态已更新为已发送");
+                    console.log("[JS-API] ✓ 第三步完成：文件消息状态已更新为已发送");
                 } catch (saveError) {
-                    console.error("[JS-API] ✗ 第五步失败：更新消息失败:", saveError);
-                    // 不影响文件发送结果
+                    console.error("[JS-API] ✗ 第三步失败：更新消息失败:", saveError);
                 }
                 
                 console.log("[JS-API] ========== 文件发送完整流程结束 ==========");
                 return {
                     success: true,
-                    file_id: result.file_id || '',
+                    file_id: '',
                     file_name: fileName,
                     file_size: fileSize,
                 };
