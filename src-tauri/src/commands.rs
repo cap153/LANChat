@@ -2,7 +2,7 @@
 use crate::db::DbState;
 use crate::peers::{Peer, PeerManager};
 use std::sync::Arc;
-use tauri::State;
+use tauri::{State, Manager};
 
 
 // 用于管理 PeerManager 的状态
@@ -12,7 +12,7 @@ pub struct PeerState {
 
 /// 根据设备内存和文件大小计算最优分块大小
 #[cfg(feature = "desktop")]
-fn calculate_optimal_chunk_size(file_size: usize) -> usize {
+fn calculate_optimal_chunk_size(_file_size: usize) -> usize {
     use sysinfo::System;
     
     let mut sys = System::new_all();
@@ -24,20 +24,14 @@ fn calculate_optimal_chunk_size(file_size: usize) -> usize {
     // 使用可用内存的 80%（大胆使用内存以获得更快的速度）
     let max_chunk_memory = available_memory * 80 / 100;
     
-    // 根据文件大小选择基础分块大小
-    let base_chunk_size = if file_size < 100 * 1024 * 1024 {
-        50 * 1024 * 1024  // < 100MB: 50MB
-    } else if file_size < 500 * 1024 * 1024 {
-        100 * 1024 * 1024  // 100-500MB: 100MB
-    } else if file_size < 1024 * 1024 * 1024 {
-        200 * 1024 * 1024  // 500MB-1GB: 200MB
-    } else if file_size < 5 * 1024 * 1024 * 1024 {
-        300 * 1024 * 1024  // 1-5GB: 300MB
-    } else {
-        500 * 1024 * 1024  // > 5GB: 500MB
-    };
-    
-    let chunk_size = std::cmp::min(base_chunk_size, max_chunk_memory);
+    // 动态计算分块大小：使用可用内存的 80%，但最小 50MB，最大 500MB
+    let chunk_size = std::cmp::max(
+        50 * 1024 * 1024,  // 最小 50MB
+        std::cmp::min(
+            max_chunk_memory,  // 使用可用内存的 80%
+            500 * 1024 * 1024  // 最大 500MB
+        )
+    );
     
     println!("[Command] 系统可用内存: {} MB", available_memory / (1024 * 1024));
     println!("[Command] 内存预算: {} MB", max_chunk_memory / (1024 * 1024));
@@ -134,7 +128,7 @@ pub async fn get_chat_history(
 
 #[tauri::command]
 pub async fn send_file(
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
     state: State<'_, DbState>,
     peer_id: String,
     peer_addr: String,
@@ -219,12 +213,32 @@ pub async fn send_file(
     // 获取自己的 ID（发送者 ID）
     let my_id = crate::db::get_user_id(&state.pool).await?;
     
+    // 获取接收方的可用内存
+    let receiver_memory_mb = if let Some(peer_state) = app.try_state::<PeerState>() {
+        let peers = peer_state.manager.get_all_peers();
+        peers.iter()
+            .find(|p| p.addr.starts_with(&peer_addr.split(':').next().unwrap_or("")))
+            .map(|p| p.available_memory_mb)
+            .unwrap_or(1024) // 默认 1GB
+    } else {
+        1024 // 默认 1GB
+    };
+    
+    println!("[Command] 接收方可用内存: {} MB", receiver_memory_mb);
+    
     // 分块上传
     let chunk_size = calculate_optimal_chunk_size(file_size);
-    let total_chunks = (file_size + chunk_size - 1) / chunk_size;
+    
+    // 根据接收方内存调整分块大小（取发送方和接收方的最小值）
+    let max_chunk_for_receiver = std::cmp::max(50 * 1024 * 1024, receiver_memory_mb as usize * 1024 * 1024 / 4); // 接收方内存的 1/4
+    let adjusted_chunk_size = std::cmp::min(chunk_size, max_chunk_for_receiver);
+    
+    println!("[Command] 原始分块大小: {} MB, 调整后: {} MB", chunk_size / (1024 * 1024), adjusted_chunk_size / (1024 * 1024));
+    
+    let total_chunks = (file_size + adjusted_chunk_size - 1) / adjusted_chunk_size;
     
     println!("[Command] 开始分块上传: 文件大小={}, 分块大小={}, 总分块数={}", 
-             file_size, chunk_size, total_chunks);
+             file_size, adjusted_chunk_size, total_chunks);
     
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
@@ -243,17 +257,28 @@ pub async fn send_file(
     let start_time = std::time::Instant::now();
     
     loop {
-        // 读取分块
-        let mut buf = vec![0u8; chunk_size];
-        let n = tokio::io::AsyncReadExt::read(&mut file, &mut buf)
-            .await
-            .map_err(|e| format!("读取文件失败: {}", e))?;
+        // 读取分块（循环读取直到填满缓冲区或文件结束）
+        let mut buf = vec![0u8; adjusted_chunk_size];
+        let mut bytes_read = 0;
         
-        if n == 0 {
+        while bytes_read < adjusted_chunk_size {
+            let n = tokio::io::AsyncReadExt::read(&mut file, &mut buf[bytes_read..])
+                .await
+                .map_err(|e| format!("读取文件失败: {}", e))?;
+            
+            if n == 0 {
+                break; // 文件读取完毕
+            }
+            
+            bytes_read += n;
+        }
+        
+        if bytes_read == 0 {
             break; // 文件读取完毕
         }
         
-        buf.truncate(n);
+        buf.truncate(bytes_read);
+        let n = bytes_read;
         
         // 构造 multipart 请求
         let form = reqwest::multipart::Form::new()

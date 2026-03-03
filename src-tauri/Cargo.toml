@@ -22,7 +22,7 @@ required-features = ["web"]
 [features]
 default = ["desktop"]
 desktop = ["tauri", "tauri-plugin-shell", "tauri-plugin-fs", "tauri-plugin-dialog", "tauri-plugin-sql", "tauri-plugin-log", "tauri-plugin-single-instance", "tauri-build", "sysinfo"]
-web = []
+web = ["sysinfo"]
 
 [build-dependencies]
 tauri-build = { version = "2.0", features = [], optional = true }

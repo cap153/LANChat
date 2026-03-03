@@ -11,6 +11,7 @@ pub struct Peer {
     pub addr: String,
     pub last_seen: u64,   // Unix 时间戳
     pub is_offline: bool, // 是否离线
+    pub available_memory_mb: u64, // 可用内存（MB）
 }
 
 // 全局在线用户列表
@@ -27,6 +28,11 @@ impl PeerManager {
 
     // 添加或更新用户
     pub fn add_or_update(&self, id: String, name: String, addr: String) {
+        self.add_or_update_with_memory(id, name, addr, 0);
+    }
+
+    // 添加或更新用户（包含内存信息）
+    pub fn add_or_update_with_memory(&self, id: String, name: String, addr: String, available_memory_mb: u64) {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -41,11 +47,12 @@ impl PeerManager {
             peer.addr = addr;
             peer.last_seen = now;
             peer.is_offline = false;
+            peer.available_memory_mb = available_memory_mb;
             
             if was_offline {
-                println!("[PeerManager] 用户重新上线: {} ({})", peer.name, peer.id);
+                println!("[PeerManager] 用户重新上线: {} ({}) - 可用内存: {} MB", peer.name, peer.id, available_memory_mb);
             } else {
-                println!("[PeerManager] 更新用户: {} ({})", peer.name, peer.id);
+                println!("[PeerManager] 更新用户: {} ({}) - 可用内存: {} MB", peer.name, peer.id, available_memory_mb);
             }
         } else {
             // 新用户
@@ -55,8 +62,9 @@ impl PeerManager {
                 addr,
                 last_seen: now,
                 is_offline: false,
+                available_memory_mb,
             };
-            println!("[PeerManager] 添加新用户: {} ({})", name, id);
+            println!("[PeerManager] 添加新用户: {} ({}) - 可用内存: {} MB", name, id, available_memory_mb);
             peers.insert(id, peer);
         }
     }

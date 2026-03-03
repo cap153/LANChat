@@ -36,7 +36,7 @@ fn create_broadcast_socket(bind_addr: &str) -> Result<UdpSocket, std::io::Error>
     Ok(socket.into())
 }
 
-// 统一端口广播 - 动态获取用户名
+// 统一端口广播 - 动态获取用户名和可用内存
 pub async fn start_announcing(port: u16, user_id: String, pool: sqlx::Pool<sqlx::Sqlite>) {
     let socket = match create_broadcast_socket("0.0.0.0:0") {
         Ok(s) => s,
@@ -59,7 +59,13 @@ pub async fn start_announcing(port: u16, user_id: String, pool: sqlx::Pool<sqlx:
             }
         };
         
-        let msg = format!("LANChat|ONLINE|{}|{}|{}", user_id, username, port);
+        // 获取可用内存（MB）
+        use sysinfo::System;
+        let mut sys = System::new_all();
+        sys.refresh_all();
+        let available_memory_mb = sys.available_memory() / 1024; // 转换为 MB
+        
+        let msg = format!("LANChat|ONLINE|{}|{}|{}|{}", user_id, username, port, available_memory_mb);
         match socket.send_to(msg.as_bytes(), &broadcast_addr) {
             Ok(size) => println!("[UDP] 广播成功: {} 字节 -> {}", size, broadcast_addr),
             Err(e) => eprintln!("[UDP] 广播失败: {}", e),
@@ -88,11 +94,12 @@ pub async fn start_listening(port: u16, my_id: String, _my_name: String, app: Op
             let msg = String::from_utf8_lossy(&buf[..size]);
             let parts: Vec<&str> = msg.split('|').collect();
             
-            // 新协议: LANChat|ONLINE|UUID|用户名|端口
-            if parts.len() >= 5 && parts[0] == "LANChat" {
+            // 新协议: LANChat|ONLINE|UUID|用户名|端口|可用内存(MB)
+            if parts.len() >= 6 && parts[0] == "LANChat" {
                 let peer_id = parts[2].to_string();
                 let name = parts[3].to_string();
                 let peer_port = parts[4];
+                let available_memory_mb: u64 = parts[5].parse().unwrap_or(0);
                 
                 // 忽略自己
                 if peer_id == my_id {
@@ -100,10 +107,10 @@ pub async fn start_listening(port: u16, my_id: String, _my_name: String, app: Op
                 }
 
                 let peer_addr = format!("{}:{}", addr.ip(), peer_port);
-                println!("[UDP] 发现用户: {} ({}) at {}", name, peer_id, peer_addr);
+                println!("[UDP] 发现用户: {} ({}) at {} (可用内存: {} MB)", name, peer_id, peer_addr, available_memory_mb);
 
                 // 添加到全局用户列表
-                peer_manager.add_or_update(peer_id.clone(), name.clone(), peer_addr.clone());
+                peer_manager.add_or_update_with_memory(peer_id.clone(), name.clone(), peer_addr.clone(), available_memory_mb);
 
                 // 只有当 app 存在时（桌面端）才发送事件
                 if let Some(app_handle) = &app {
@@ -112,7 +119,8 @@ pub async fn start_listening(port: u16, my_id: String, _my_name: String, app: Op
                         serde_json::json!({
                             "id": peer_id,
                             "name": name,
-                            "addr": peer_addr
+                            "addr": peer_addr,
+                            "available_memory_mb": available_memory_mb
                         }),
                     );
                 }
@@ -141,11 +149,12 @@ pub async fn start_listening(port: u16, my_id: String, _my_name: String, peer_ma
             let msg = String::from_utf8_lossy(&buf[..size]);
             let parts: Vec<&str> = msg.split('|').collect();
             
-            // 新协议: LANChat|ONLINE|UUID|用户名|端口
-            if parts.len() >= 5 && parts[0] == "LANChat" {
+            // 新协议: LANChat|ONLINE|UUID|用户名|端口|可用内存(MB)
+            if parts.len() >= 6 && parts[0] == "LANChat" {
                 let peer_id = parts[2].to_string();
                 let name = parts[3].to_string();
                 let peer_port = parts[4];
+                let available_memory_mb: u64 = parts[5].parse().unwrap_or(0);
                 
                 // 忽略自己
                 if peer_id == my_id {
@@ -153,10 +162,10 @@ pub async fn start_listening(port: u16, my_id: String, _my_name: String, peer_ma
                 }
 
                 let peer_addr = format!("{}:{}", addr.ip(), peer_port);
-                println!("[UDP] 发现用户: {} ({}) at {}", name, peer_id, peer_addr);
+                println!("[UDP] 发现用户: {} ({}) at {} (可用内存: {} MB)", name, peer_id, peer_addr, available_memory_mb);
                 
                 // 添加到全局用户列表
-                peer_manager.add_or_update(peer_id, name, peer_addr);
+                peer_manager.add_or_update_with_memory(peer_id, name, peer_addr, available_memory_mb);
             }
         }
     }

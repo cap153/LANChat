@@ -321,20 +321,20 @@ function calculateOptimalChunkSize(fileSize) {
     // 使用可用内存的 80%（大胆使用内存以获得更快的速度）
     const maxChunkMemory = availableMemory * 0.8;
     
-    // 根据文件大小选择分块策略
+    // 根据文件大小选择分块策略，基础大小调大
     let baseChunkSize;
     if (fileSize < 100 * 1024 * 1024) {
-        // < 100MB：50MB 分块
-        baseChunkSize = 50 * 1024 * 1024;
-    } else if (fileSize < 500 * 1024 * 1024) {
-        // 100-500MB：100MB 分块
+        // < 100MB：100MB 分块
         baseChunkSize = 100 * 1024 * 1024;
-    } else if (fileSize < 1024 * 1024 * 1024) {
-        // 500MB-1GB：200MB 分块
+    } else if (fileSize < 500 * 1024 * 1024) {
+        // 100-500MB：200MB 分块
         baseChunkSize = 200 * 1024 * 1024;
-    } else if (fileSize < 5 * 1024 * 1024 * 1024) {
-        // 1-5GB：300MB 分块
+    } else if (fileSize < 1024 * 1024 * 1024) {
+        // 500MB-1GB：300MB 分块
         baseChunkSize = 300 * 1024 * 1024;
+    } else if (fileSize < 5 * 1024 * 1024 * 1024) {
+        // 1-5GB：400MB 分块
+        baseChunkSize = 400 * 1024 * 1024;
     } else {
         // > 5GB：500MB 分块
         baseChunkSize = 500 * 1024 * 1024;
@@ -418,6 +418,12 @@ async function apiSendFile(peerId, peerAddr, file) {
                 
                 console.log("[JS-API] 文件名:", fileName, "大小:", fileSize, "字节");
                 
+                // 检查 fileSize 是否有效
+                if (fileSize <= 0) {
+                    console.error("[JS-API] ✗ 文件大小无效:", fileSize);
+                    throw new Error("无法获取文件大小");
+                }
+                
                 // 立即保存"上传中"消息到数据库，让UI显示
                 console.log("[JS-API] 立即保存上传中消息到数据库");
                 let messageId = null;
@@ -454,23 +460,31 @@ async function apiSendFile(peerId, peerAddr, file) {
                 
                 try {
                     const file = await tauri.fs.open(filePath, { read: true });
+                    const bufferSize = 2 * 1024 * 1024; // 2MB 缓冲区用于读取
                     
                     while (offset < fileSize) {
                         const size = Math.min(chunkSize, fileSize - offset);
                         const buf = new Uint8Array(size);
-                        await file.read(buf, { at: offset });
+                        let bytesRead = 0;
+                        
+                        // 分多次读取以填满 chunkSize 的缓冲区
+                        while (bytesRead < size) {
+                            const toRead = Math.min(bufferSize, size - bytesRead);
+                            const tempBuf = new Uint8Array(toRead);
+                            const n = await file.read(tempBuf, { at: offset + bytesRead });
+                            if (n === null || n === 0) break;
+                            buf.set(tempBuf.slice(0, n), bytesRead);
+                            bytesRead += n;
+                        }
                         
                         // 构造 FormData 上传这一块
                         const formData = new FormData();
-                        // 重要：文本字段必须在文件字段之前
                         formData.append('peer_id', myId);
                         formData.append('file_name', fileName);
                         formData.append('file_size', fileSize.toString());
                         formData.append('chunk_index', chunkCount.toString());
                         formData.append('chunk_total', Math.ceil(fileSize / chunkSize).toString());
-                        formData.append('chunk', new Blob([buf], { type: 'application/octet-stream' }), 'chunk');
-                        
-                        console.log("[JS-API] 上传分块", chunkCount + 1, "大小:", size, "字节");
+                        formData.append('chunk', new Blob([buf.slice(0, bytesRead)], { type: 'application/octet-stream' }), 'chunk');
                         
                         const resp = await fetch(uploadUrl, {
                             method: 'POST',
@@ -481,12 +495,10 @@ async function apiSendFile(peerId, peerAddr, file) {
                         if (!resp.ok) {
                             const errorText = await resp.text();
                             console.error("[JS-API] ✗ 上传分块失败，状态码:", resp.status);
-                            console.error("[JS-API] ✗ 错误响应体:", errorText);
-                            console.error("[JS-API] ✗ 响应头:", resp.headers);
                             throw new Error(`HTTP ${resp.status}: ${errorText}`);
                         }
                         
-                        offset += size;
+                        offset += bytesRead;
                         chunkCount++;
                         
                         // 每秒打印一次进度并更新 UI
