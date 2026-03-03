@@ -545,61 +545,36 @@ async fn upload_file_http(
             .as_secs() as i64;
         
         match crate::db::create_received_file_record(&state.pool, sender_id.clone(), file_name.clone(), path.to_str().unwrap_or("").to_string(), timestamp).await {
-            Ok(_) => {
-                println!("[Web Server] ✓ 文件接收开始，已保存到数据库");
-                
-                // 发送 Tauri 事件通知前端（桌面端）
-                #[cfg(feature = "desktop")]
-                if let Some(ref app) = state.app_handle {
-                    use tauri::Emitter;
-                    let _ = app.emit("new-message", serde_json::json!({
-                        "from_id": sender_id,
-                        "from_name": "Unknown",
-                        "content": file_name.clone(),
-                        "timestamp": timestamp,
-                        "msg_type": "file",
-                        "file_name": file_name.clone(),
-                        "file_size": file_size,
-                        "file_status": "downloading",
-                    }));
-                    println!("[Web Server] ✓ Tauri 事件已发送 (downloading)");
-                }
+            Ok(msg_id) => {
+                println!("[Web Server] ✓ 第一块数据：文件消息已创建，ID: {}, 状态: downloading", msg_id);
             }
             Err(e) => {
-                eprintln!("[Web Server] ✗ 保存到数据库失败: {}", e);
+                eprintln!("[Web Server] ✗ 第一块数据：创建文件消息失败: {}", e);
             }
         }
     }
     
-    // 在最后一块时更新状态为 accepted
-    if chunk_index == chunk_total - 1 && !file_name.is_empty() {
+    // 检查是否是最后一块：已接收的数据大小 + 当前块大小 >= 文件总大小
+    let received_size = if chunk_index == 0 {
+        chunk_data.len() as u64
+    } else {
+        // 对于后续块，我们需要从数据库查询已接收的大小
+        // 简单方案：检查文件大小是否匹配
+        let file_metadata = match tokio::fs::metadata(&path).await {
+            Ok(m) => m.len(),
+            Err(_) => 0,
+        };
+        file_metadata
+    };
+    
+    // 如果已接收的数据大小 >= 文件总大小，说明是最后一块
+    if received_size >= file_size && !file_name.is_empty() {
         match crate::db::update_file_status(&state.pool, &file_name, "accepted").await {
             Ok(_) => {
-                println!("[Web Server] ✓ 文件接收完成，状态已更新为 accepted");
-                
-                // 发送 Tauri 事件通知前端（桌面端）
-                #[cfg(feature = "desktop")]
-                if let Some(ref app) = state.app_handle {
-                    use tauri::Emitter;
-                    let timestamp = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64;
-                    let _ = app.emit("new-message", serde_json::json!({
-                        "from_id": sender_id,
-                        "from_name": "Unknown",
-                        "content": file_name.clone(),
-                        "timestamp": timestamp,
-                        "msg_type": "file",
-                        "file_name": file_name.clone(),
-                        "file_size": file_size,
-                        "file_status": "accepted",
-                    }));
-                    println!("[Web Server] ✓ Tauri 事件已发送 (accepted)");
-                }
+                println!("[Web Server] ✓ 最后一块数据：文件状态已更新为 accepted (已接收: {} 字节)", received_size);
             }
             Err(e) => {
-                eprintln!("[Web Server] ✗ 更新数据库失败: {}", e);
+                eprintln!("[Web Server] ✗ 最后一块数据：更新文件状态失败: {}", e);
             }
         }
     }

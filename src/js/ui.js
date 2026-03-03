@@ -370,10 +370,12 @@ function addMessageToChat(message, isSent) {
         const statusDiv = document.createElement('div');
         if (fileStatus === 'downloading') {
             statusDiv.className = 'file-downloading';
-            statusDiv.textContent = '下载中...';
+            const speed = message.transfer_speed ? Math.round(message.transfer_speed) + ' MB/s' : '下载中...';
+            statusDiv.textContent = speed;
         } else if (fileStatus === 'uploading') {
             statusDiv.className = 'file-uploading';
-            statusDiv.textContent = '上传中...';
+            const speed = message.transfer_speed ? Math.round(message.transfer_speed) + ' MB/s' : '上传中...';
+            statusDiv.textContent = speed;
         } else if (fileStatus === 'accepted' && !isSent) {
             statusDiv.className = 'file-finish';
             statusDiv.textContent = 'finish';
@@ -636,14 +638,71 @@ function formatFileSize(bytes) {
 async function downloadFile(fileId, fileName) {
 	try {
 		const url = `/api/download/${fileId}`;
+		
+		// 使用 fetch 来获取下载进度
+		const response = await fetch(url);
+		if (!response.ok) {
+			throw new Error(`HTTP ${response.status}`);
+		}
+		
+		const contentLength = response.headers.get('content-length');
+		const totalSize = parseInt(contentLength, 10);
+		
+		const reader = response.body.getReader();
+		const chunks = [];
+		let receivedLength = 0;
+		const startTime = Date.now();
+		let lastLogTime = startTime;
+		
+		// 更新下载速度显示
+		const updateDownloadSpeed = () => {
+			const elapsed = (Date.now() - startTime) / 1000;
+			if (elapsed > 0) {
+				const speed = receivedLength / (1024 * 1024) / elapsed;
+				const statusDivs = document.querySelectorAll('.file-downloading');
+				statusDivs.forEach(div => {
+					div.textContent = Math.round(speed) + ' MB/s';
+				});
+			}
+		};
+		
+		while (true) {
+			const {done, value} = await reader.read();
+			
+			if (done) break;
+			
+			chunks.push(value);
+			receivedLength += value.length;
+			
+			// 每秒更新一次速度显示
+			const now = Date.now();
+			if (now - lastLogTime > 1000) {
+				updateDownloadSpeed();
+				lastLogTime = now;
+			}
+		}
+		
+		// 合并所有分块
+		const chunksAll = new Uint8Array(receivedLength);
+		let position = 0;
+		for (const chunk of chunks) {
+			chunksAll.set(chunk, position);
+			position += chunk.length;
+		}
+		
+		// 创建 Blob 并下载
+		const blob = new Blob([chunksAll]);
 		const a = document.createElement('a');
-		a.href = url;
+		a.href = URL.createObjectURL(blob);
 		a.download = fileName;
 		document.body.appendChild(a);
 		a.click();
 		document.body.removeChild(a);
-
-		console.log('[UI] 开始下载文件:', fileName);
+		URL.revokeObjectURL(a.href);
+		
+		const totalTime = (Date.now() - startTime) / 1000;
+		const avgSpeed = (receivedLength / (1024 * 1024)) / totalTime;
+		console.log('[UI] ✓ 文件下载完成:', fileName, '耗时:', totalTime.toFixed(2), '秒，平均速度:', avgSpeed.toFixed(2), 'MB/s');
 	} catch (e) {
 		console.error('[UI] 下载文件失败:', e);
 		alert('下载失败: ' + e.message);

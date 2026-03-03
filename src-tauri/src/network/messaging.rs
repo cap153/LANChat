@@ -261,15 +261,13 @@ pub async fn get_chat_history(
     // 查询双向对话：
     // 1. 我发送给对方的消息 (sender_id = my_id AND receiver_id = peer_id)
     // 2. 对方发送给我的消息 (sender_id = peer_id AND (receiver_id = my_id OR receiver_id IS NULL))
-    // 3. 对方发送给我的文件 (sender_id = peer_id AND receiver_id = 'me')
-    // 4. 兼容旧数据：sender_id = 'me' 的消息
+    // 3. 兼容旧数据：sender_id = 'me' 的消息
     let messages = sqlx::query_as::<_, crate::models::Message>(
         "SELECT id, sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status 
          FROM messages 
          WHERE 
             (sender_id = ? AND receiver_id = ?) OR 
             (sender_id = ? AND (receiver_id = ? OR receiver_id IS NULL)) OR
-            (sender_id = ? AND receiver_id = 'me') OR
             (sender_id = 'me' AND receiver_id = ?)
          ORDER BY timestamp ASC LIMIT ?"
     )
@@ -277,7 +275,6 @@ pub async fn get_chat_history(
     .bind(peer_id)       // 发送给对方
     .bind(peer_id)       // 对方发送的消息
     .bind(&my_id)        // 发送给我
-    .bind(peer_id)       // 对方发送给我的文件
     .bind(peer_id)       // 兼容旧数据
     .bind(limit)
     .fetch_all(pool)

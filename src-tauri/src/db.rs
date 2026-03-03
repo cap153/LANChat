@@ -606,12 +606,14 @@ pub async fn create_received_file_record(
     file_path: String,
     timestamp: i64,
 ) -> Result<i64, String> {
-    println!("[DB] 创建接收文件记录: 发送者={}, 文件={}", sender_id, file_name);
+    // 获取当前用户ID作为接收者
+    let my_id = get_user_id(pool).await?;
     
     let result = sqlx::query(
-        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES (?, 'me', ?, 'file', ?, ?, 'downloading')"
+        "INSERT INTO messages (sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status) VALUES (?, ?, ?, 'file', ?, ?, 'downloading')"
     )
     .bind(&sender_id)
+    .bind(&my_id)
     .bind(&file_name)
     .bind(timestamp)
     .bind(&file_path)
@@ -620,6 +622,6 @@ pub async fn create_received_file_record(
     .map_err(|e| format!("创建记录失败: {}", e))?;
     
     let msg_id = result.last_insert_rowid();
-    println!("[DB] 接收文件记录已创建，ID: {}", msg_id);
+    println!("[DB] ✓ 接收文件记录已创建，ID: {}, 文件: {}, 状态: downloading", msg_id, file_name);
     Ok(msg_id)
 }

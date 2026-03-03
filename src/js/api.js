@@ -489,12 +489,19 @@ async function apiSendFile(peerId, peerAddr, file) {
                         offset += size;
                         chunkCount++;
                         
-                        // 每秒打印一次进度
+                        // 每秒打印一次进度并更新 UI
                         const now = Date.now();
                         if (now - lastLogTime > 1000) {
                             const elapsed = (now - startTime) / 1000;
                             const speed = offset / (1024 * 1024) / elapsed;
                             console.log("[JS-API] 已上传:", Math.round(offset / 1024 / 1024), "MB, 速度:", Math.round(speed), "MB/s");
+                            
+                            // 更新 UI 中的速度显示
+                            const statusDivs = document.querySelectorAll('.file-uploading');
+                            statusDivs.forEach(div => {
+                                div.textContent = Math.round(speed) + ' MB/s';
+                            });
+                            
                             lastLogTime = now;
                         }
                     }
@@ -643,12 +650,19 @@ async function apiSendFile(peerId, peerAddr, file) {
                 offset += size;
                 chunkIndex++;
                 
-                // 每秒打印一次进度
+                // 每秒打印一次进度并更新 UI
                 const now = Date.now();
                 if (now - lastLogTime > 1000) {
                     const elapsed = (now - startTime) / 1000;
                     const speed = offset / (1024 * 1024) / elapsed;
                     console.log("[JS-API] 已上传:", Math.round(offset / 1024 / 1024), "MB, 速度:", Math.round(speed), "MB/s");
+                    
+                    // 更新 UI 中的速度显示
+                    const statusDivs = document.querySelectorAll('.file-uploading');
+                    statusDivs.forEach(div => {
+                        div.textContent = Math.round(speed) + ' MB/s';
+                    });
+                    
                     lastLogTime = now;
                 }
             }
