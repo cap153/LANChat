@@ -423,6 +423,13 @@ h2::before {
 	word-wrap: break-word;
 }
 
+/* --- 消息普通文本内容 --- */
+.message-text {
+	white-space: pre-wrap;   /* 核心：保留换行符和缩进空格，且允许折行 */
+	word-break: break-word;  /* 兼容处理：防止过长的 URL 或长单词不换行 */
+	font-family: inherit;    /* 继承输入框的字体，确保缩进视觉一致 */
+}
+
 /* 2. 接收的消息 (左侧) - 实心深灰 */
 .message.received .message-content {
 	background: #44475a;
@@ -622,28 +629,38 @@ h2::before {
 /* --- 底部输入栏 --- */
 .chat-input-container {
 	flex-shrink: 0;
+	position: relative;
+	/* 【新增】设置为相对定位，作为按钮绝对定位的参考系 */
 	display: flex;
-	align-items: center;
-	gap: 12px;
 	padding: 15px 25px;
 	background: var(--bg-panel);
 	border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+/* --- 附件选择按钮 --- */
 #attach-file-btn {
-	width: 40px;
-	height: 40px;
+	position: absolute;
+	/* 【新增】绝对定位 */
+	top: 25px;
+	/* 容器 top-padding(15) + 输入框内部上偏移(10) */
+	left: 35px;
+	/* 容器 left-padding(25) + 输入框内部左偏移(10) */
+	z-index: 10;
+
+	width: 32px;
+	/* 为了内嵌更精致，尺寸从 40 改为 32 */
+	height: 32px;
 	border-radius: 50%;
 	background: rgba(255, 255, 255, 0.05);
 	border: 1px solid rgba(255, 255, 255, 0.1);
 	color: var(--text-dim);
-	font-size: 20px;
+	font-size: 16px;
+	/* 图标稍作缩小 */
 	cursor: pointer;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	transition: all 0.2s;
-	flex-shrink: 0;
 }
 
 #attach-file-btn:hover {
@@ -654,15 +671,29 @@ h2::before {
 
 #chat-input {
 	flex: 1;
+	width: 100%;
+	box-sizing: border-box;
+	/* 确保 padding 不会撑破宽度 */
 	background: rgba(0, 0, 0, 0.2);
 	border: 1px solid rgba(98, 114, 164, 0.4);
 	border-radius: var(--radius-btn);
-	/* 统一圆角 */
-	padding: 12px 15px;
+
+	/* 上下间距正常，左右留出大片 padding 给内部悬浮的按钮 */
+	/* 顺时针：上14px, 右105px(给发送按钮+滚动条留位), 下14px, 左55px(给附件按钮留位) */
+	padding: 14px 105px 14px 55px;
+
 	font-size: 15px;
 	color: #fff;
 	outline: none;
 	transition: all 0.3s;
+	font-family: inherit;
+	resize: none;
+	min-height: 60px;
+	/* 稍微加高一点，确保能装下内部按钮 */
+	max-height: 200px;
+	overflow-y: auto;
+	white-space: pre-wrap;
+	word-wrap: break-word;
 }
 
 #chat-input:focus {
@@ -670,31 +701,36 @@ h2::before {
 	background: rgba(0, 0, 0, 0.3);
 }
 
-/* --- 发送按钮 (改为“选择”按钮同款样式) --- */
+/* --- 发送按钮 --- */
 #send-btn {
+	position: absolute;
+	/* 【新增】绝对定位 */
+	top: 23px;
+	/* 稍微微调，使其和第一行文字视觉垂直居中 */
+	right: 40px;
+	/* 容器 right-padding(25) + 输入框内部右偏移(15) */
+	z-index: 10;
+
 	background: rgba(98, 114, 164, 0.2);
-	/* 深色半透明背景 */
 	color: var(--primary);
-	/* 紫色文字 #bd93f9 */
 	border: 1px solid rgba(189, 147, 249, 0.3);
-	/* 紫色细边框 */
-	padding: 10px 24px;
-	border-radius: var(--radius-btn);
-	/* 12px 圆角 */
+
+	/* 调整尺寸以适应输入框内部 */
+	padding: 6px 18px;
+	border-radius: 8px;
+	/* 圆角稍微改小显得更灵动 */
+
 	font-weight: 600;
 	cursor: pointer;
-	flex-shrink: 0;
 	transition: all 0.3s;
 	letter-spacing: 1px;
 	box-shadow: none;
-	/* 去掉默认阴影，更清爽 */
 }
 
 /* 悬停效果：变实心紫 + 发光 */
 #send-btn:hover:not(:disabled) {
 	background: var(--primary) !important;
 	color: #282a36 !important;
-	/* 变成深色背景上的深色字，对比度更高 */
 	box-shadow: 0 0 15px rgba(189, 147, 249, 0.5);
 }
 
@@ -702,7 +738,6 @@ h2::before {
 #send-btn:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
-	flex-shrink: 0;
 }
 
 /* --- 弹窗 (设置/改名) --- */
@@ -975,53 +1010,37 @@ h2::before {
 	/* 移动端输入区域调整 */
 	.chat-input-container {
 		padding: 10px;
-		/* 减小内边距 */
-		gap: 8px;
-		/* 减小间距 */
-
-		/* [新增] 避开底部手势条（小黑条） */
+		/* 避开底部手势条（小黑条） */
 		padding-bottom: calc(10px + env(safe-area-inset-bottom));
 	}
 
 	#attach-file-btn {
-		flex-shrink: 0;
-		/* 禁止被压缩 */
+		/* 移动端绝对定位坐标重算：容器10px + 内偏8px */
+		top: 18px; 
+		left: 18px;
+		width: 30px;
+		height: 30px;
+		font-size: 15px;
 	}
 
 	#chat-input {
-		flex: 1;
-		/* 占满剩余空间 */
-		min-width: 0;
-		/* 关键：防止 flex 子项溢出 */
-		padding: 10px;
+		/* 移动端寸土寸金，安全区 padding 按比例缩减 */
+		/* 上12，右85(发按钮位)，下12，左45(附件按钮位) */
+		padding: 12px 85px 12px 45px;
+		min-height: 54px;
 	}
 
 	#send-btn {
-		/* 1. 核心修复：禁止被输入框挤压 */
-		flex-shrink: 0 !important;
-		min-width: 80px !important;
-		/* 给“发送”两个字留够最小宽度 */
-		white-space: nowrap !important;
-		/* 禁止文字换行 */
-
-		/* 2. 布局修复：确保文字在任何系统下都居中 */
-		display: flex !important;
-		align-items: center;
-		justify-content: center;
-
-		/* 3. 视觉修复：强制文字颜色，防止继承错误 */
-		color: var(--primary) !important;
-		background: rgba(98, 114, 164, 0.2);
-		border: 1px solid rgba(189, 147, 249, 0.3);
-
-		/* 4. 尺寸与间距 */
-		height: 42px;
-		/* 保持固定高度 */
-		padding: 0 20px !important;
-		border-radius: var(--radius-btn);
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.3s;
+		/* 移动端发送按钮绝对定位 */
+		top: 16px; 
+		right: 18px;
+		
+		/* 覆盖原移动端强制设定的死板尺寸 */
+		min-width: 60px !important;
+		height: 32px !important; 
+		padding: 0 12px !important;
+		font-size: 13px;
+		border-radius: 8px;
 	}
 }
 

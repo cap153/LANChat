@@ -190,9 +190,20 @@ function initChat() {
 		sendMessage();
 	});
 
-	// 回车发送
+	// 自动调整 textarea 高度
+	function adjustTextareaHeight() {
+		chatInput.style.height = 'auto';
+		const newHeight = Math.min(chatInput.scrollHeight, 200);
+		chatInput.style.height = newHeight + 'px';
+	}
+
+	// 输入时调整高度
+	chatInput.addEventListener('input', adjustTextareaHeight);
+
+	// 回车发送（Shift+Enter 换行）
 	chatInput.addEventListener('keypress', (e) => {
-		if (e.key === 'Enter') {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
 			sendMessage();
 		}
 	});
@@ -305,8 +316,9 @@ async function sendMessage() {
 		// 调用 API 发送消息
 		await apiSendMessage(window.currentChatPeer.id, window.currentChatPeer.addr, content);
 
-		// 清空输入框
+		// 清空输入框并重置高度
 		chatInput.value = '';
+		chatInput.style.height = 'auto';
 
 		// 显示消息
 		addMessageToChat({
