@@ -604,10 +604,13 @@ h2::before {
 	padding: 10px;
 	display: flex;
 	align-items: center;
+	cursor: pointer;
+	transition: all 0.2s;
 }
 
 .message.received .message-file:hover {
 	background: rgba(0, 0, 0, 0.3);
+	border-color: rgba(255, 255, 255, 0.15);
 }
 
 /* --- 2. 优化文件卡片：内嵌式布局 --- */
@@ -620,10 +623,13 @@ h2::before {
 	padding: 10px;
 	display: flex;
 	align-items: center;
+	cursor: pointer;
+	transition: all 0.2s;
 }
 
 .message.sent .message-file:hover {
 	background: rgba(255, 255, 255, 0.35);
+	border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* --- 底部输入栏 --- */

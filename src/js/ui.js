@@ -397,9 +397,22 @@ function addMessageToChat(message, isSent) {
             contentDiv.appendChild(statusDiv);
         }
 
-        if (!isSent && message.file_id && fileStatus === 'accepted') {
+        // 对于已完成的文件（sent 或 accepted），添加点击处理
+        if (fileStatus === 'sent' || fileStatus === 'accepted') {
             fileContainer.style.cursor = 'pointer';
-            fileContainer.addEventListener('click', () => downloadFile(message.file_id, message.file_name || message.content));
+            
+            const tauri = window.__TAURI__;
+            if (tauri) {
+                // 桌面端：点击打开文件所在位置
+                if (message.file_path) {
+                    fileContainer.addEventListener('click', () => openFileLocation(message.file_path));
+                }
+            } else {
+                // Web 端：点击下载文件
+                if (message.file_id) {
+                    fileContainer.addEventListener('click', () => downloadFile(message.file_id, message.file_name || message.content));
+                }
+            }
         }
     } else {
         const textSpan = document.createElement('span');
@@ -718,6 +731,24 @@ async function downloadFile(fileId, fileName) {
 	} catch (e) {
 		console.error('[UI] 下载文件失败:', e);
 		alert('下载失败: ' + e.message);
+	}
+}
+
+// 打开文件所在位置（仅桌面端）
+async function openFileLocation(filePath) {
+	const tauri = window.__TAURI__;
+	
+	if (!tauri) {
+		alert('此功能仅在桌面端支持');
+		return;
+	}
+	
+	try {
+		await tauri.core.invoke('open_file_location', { filePath: filePath });
+		console.log('[UI] ✓ 打开文件位置:', filePath);
+	} catch (e) {
+		console.error('[UI] 打开文件位置失败:', e);
+		alert('打开文件位置失败: ' + e.message);
 	}
 }
 
