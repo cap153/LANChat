@@ -100,8 +100,13 @@ cargo build --release --bin lanchat-web --features web --no-default-features
 - [x] 文件流式传输
 - [x] 支持广播和组播
 - [x] Android 随机热点网段暴力覆盖
+- [x] web端文件消息点击直接下载
+- [x] 桌面端文件消息点击打开所在路径
 
 ### 🚧 进行中
+- [ ] 桌面端、web 端支持粘贴图片或文件
+- [ ] Android 端作为文件打开方式，并选择用户发送文件
+- [ ] Android 端点击文件消息选择应用打开
 - [ ] 删除历史聊天记录
 - [ ] 标注未读消息
 - [ ] 更换默认图标
