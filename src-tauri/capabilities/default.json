@@ -30,6 +30,14 @@
     "allow-accept-file",
     "allow-get-default-download-path",
     "allow-request-storage-permission",
-    "allow-save-file-message"
+    "allow-save-file-message",
+    "allow-open-file-location",
+    {
+      "identifier": "opener:allow-reveal-item-in-dir",
+      "allow": [
+        { "path": "[a-zA-Z]:**" },
+        { "path": "/**" }
+      ]
+    }
   ]
 }

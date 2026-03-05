@@ -24,6 +24,7 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
+        .plugin(tauri_plugin_opener::init())
         // --- 重点：添加下面这段代码 ---
         .invoke_handler(tauri::generate_handler![
             lanchat::commands::get_my_name,
@@ -41,7 +42,8 @@ fn main() {
             lanchat::commands::get_current_theme,
             lanchat::commands::get_default_download_path,
             lanchat::commands::request_storage_permission,
-            lanchat::commands::save_file_message
+            lanchat::commands::save_file_message,
+            lanchat::commands::open_file_location
         ])
         // --------------------------
         .setup(|app| {

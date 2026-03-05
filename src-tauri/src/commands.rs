@@ -602,3 +602,24 @@ pub async fn save_file_message(
     )
     .await
 }
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn open_file_location(app: tauri::AppHandle, file_path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    
+    println!("[Command] 打开文件位置: {}", file_path);
+    
+    // 使用 opener 插件打开文件所在目录
+    app.opener()
+        .reveal_item_in_dir(&file_path)
+        .map_err(|e| format!("打开文件位置失败: {}", e))?;
+    
+    println!("[Command] ✓ 文件位置已打开");
+    Ok(())
+}
+
+#[cfg(not(feature = "desktop"))]
+#[tauri::command]
+pub async fn open_file_location(_app: tauri::AppHandle, _file_path: String) -> Result<(), String> {
+    Err("此功能仅在桌面端支持".to_string())
+}

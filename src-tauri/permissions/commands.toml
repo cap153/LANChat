@@ -83,3 +83,8 @@ commands.allow = ["request_storage_permission"]
 identifier = "allow-save-file-message"
 description = "Allows saving file message to database"
 commands.allow = ["save_file_message"]
+
+[[permission]]
+identifier = "allow-open-file-location"
+description = "Allows opening file location in system file explorer"
+commands.allow = ["open_file_location"]
