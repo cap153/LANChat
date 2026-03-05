@@ -99,7 +99,7 @@ cargo build --release --bin lanchat-web --features web --no-default-features
 - [x] 单实例锁定功能
 - [x] 文件流式传输
 - [x] 支持广播和组播
-- [x] Android 随机热点网段暴力覆盖
+- [x] Android 热点随机网段暴力覆盖
 - [x] web端文件消息点击直接下载
 - [x] 桌面端文件消息点击打开所在路径
 
