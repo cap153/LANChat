@@ -371,226 +371,40 @@ async function apiSendFile(peerId, peerAddr, file) {
 			const filePath = Array.isArray(selected) ? selected[0] : selected;
 			console.log("[JS-API] 选择的文件:", filePath);
 
-			// 检测是否是 content URI (Android)
-			const isContentUri = filePath.startsWith('content://');
-			console.log("[JS-API] 文件类型:", isContentUri ? "Android content URI" : "普通路径");
-
-			let fileData, fileName, fileSize;
-
-			if (isContentUri) {
-				// Android content URI - 先完整读取文件，再上传
-				console.log("[JS-API] 使用流式读取 Android 文件（避免内存溢出）");
-
-				// 获取文件元数据以获取真实文件名和大小
-				try {
-					const metadata = await tauri.fs.stat(filePath);
-					fileSize = metadata.size;
-					console.log("[JS-API] 文件大小:", fileSize, "字节");
-
-					// 尝试从元数据获取文件名
-					if (metadata && metadata.name) {
-						fileName = metadata.name;
-					} else {
-						// 如果元数据没有文件名，尝试从 URI 提取
-						const uriParts = filePath.split('/');
-						const lastPart = decodeURIComponent(uriParts[uriParts.length - 1]);
-
-						// Android document URI 格式: image:1000019150
-						if (lastPart.startsWith('image:')) {
-							fileName = lastPart.split(':')[1] + '.jpg';
-						} else if (lastPart.startsWith('video:')) {
-							fileName = lastPart.split(':')[1] + '.mp4';
-						} else if (lastPart.startsWith('audio:')) {
-							fileName = lastPart.split(':')[1] + '.mp3';
-						} else {
-							fileName = lastPart.includes(':') ? lastPart.split(':')[1] : lastPart;
-						}
-					}
-				} catch (statError) {
-					console.warn("[JS-API] 无法获取文件元数据:", statError);
-					fileName = `file_${Date.now()}.dat`;
-					fileSize = 0;
-				}
-
-				if (!fileName || fileName === '') {
-					fileName = `file_${Date.now()}.dat`;
-				}
-
-				console.log("[JS-API] 文件名:", fileName, "大小:", fileSize, "字节");
-
-				// 检查 fileSize 是否有效
-				if (fileSize <= 0) {
-					console.error("[JS-API] ✗ 文件大小无效:", fileSize);
-					throw new Error("无法获取文件大小");
-				}
-
-				// 立即保存"上传中"消息到数据库，让UI显示
-				console.log("[JS-API] 立即保存上传中消息到数据库");
-				let messageId = null;
-				try {
-					messageId = await tauri.core.invoke('save_file_message', {
-						peerId: peerId,
-						fileName: fileName,
-						fileSize: fileSize,
-						filePath: filePath,
-						status: 'uploading'
-					});
-					console.log("[JS-API] ✓ 上传中消息已保存到数据库，消息ID:", messageId);
-				} catch (saveError) {
-					console.error("[JS-API] ✗ 保存上传中消息失败:", saveError);
-				}
-
-				// 根据设备内存和文件大小计算最优分块大小
-				const chunkSize = calculateOptimalChunkSize(fileSize);
-
-				// 第一步：获取自己的 ID
-				console.log("[JS-API] ========== 第一步：获取用户ID ==========");
-				const myId = await apiGetMyId();
-				console.log("[JS-API] ✓ 第一步完成：用户ID:", myId);
-
-				// 第二步：流式读取并分块上传
-				console.log("[JS-API] ========== 第二步：开始流式读取和上传 ==========");
-				const uploadUrl = `http://${peerAddr}/api/upload`;
-				console.log("[JS-API] 上传地址:", uploadUrl, "文件:", fileName, "大小:", fileSize, "字节");
-
-				let offset = 0;
-				let chunkCount = 0;
-				const startTime = Date.now();
-				let lastLogTime = startTime;
-
-				try {
-					const file = await tauri.fs.open(filePath, { read: true });
-					const bufferSize = 2 * 1024 * 1024; // 2MB 缓冲区用于读取
-
-					while (offset < fileSize) {
-						const size = Math.min(chunkSize, fileSize - offset);
-						const buf = new Uint8Array(size);
-						let bytesRead = 0;
-
-						// 分多次读取以填满 chunkSize 的缓冲区
-						while (bytesRead < size) {
-							const toRead = Math.min(bufferSize, size - bytesRead);
-							const tempBuf = new Uint8Array(toRead);
-							const n = await file.read(tempBuf, { at: offset + bytesRead });
-							if (n === null || n === 0) break;
-							buf.set(tempBuf.slice(0, n), bytesRead);
-							bytesRead += n;
-						}
-
-						// 构造 FormData 上传这一块
-						const formData = new FormData();
-						formData.append('peer_id', myId);
-						formData.append('file_name', fileName);
-						formData.append('file_size', fileSize.toString());
-						formData.append('chunk_index', chunkCount.toString());
-						formData.append('chunk_total', Math.ceil(fileSize / chunkSize).toString());
-						formData.append('chunk', new Blob([buf.slice(0, bytesRead)], { type: 'application/octet-stream' }), 'chunk');
-
-						const resp = await fetch(uploadUrl, {
-							method: 'POST',
-							body: formData,
-							mode: 'cors',
-						});
-
-						if (!resp.ok) {
-							const errorText = await resp.text();
-							console.error("[JS-API] ✗ 上传分块失败，状态码:", resp.status);
-							throw new Error(`HTTP ${resp.status}: ${errorText}`);
-						}
-
-						offset += bytesRead;
-						chunkCount++;
-
-						// 每秒打印一次进度并更新 UI
-						const now = Date.now();
-						if (now - lastLogTime > 1000) {
-							const elapsed = (now - startTime) / 1000;
-							const speed = offset / (1024 * 1024) / elapsed;
-							console.log("[JS-API] 已上传:", Math.round(offset / 1024 / 1024), "MB, 速度:", Math.round(speed), "MB/s");
-
-							// 更新 UI 中的速度显示
-							const statusDivs = document.querySelectorAll('.file-uploading');
-							statusDivs.forEach(div => {
-								div.textContent = Math.round(speed) + ' MB/s';
-							});
-
-							lastLogTime = now;
-						}
-					}
-
-					await file.close();
-					const totalTime = (Date.now() - startTime) / 1000;
-					const avgSpeed = (offset / (1024 * 1024)) / totalTime;
-					console.log("[JS-API] ✓ 第二步完成：文件上传完成，共", chunkCount, "块，总大小:", offset, "字节，耗时:", totalTime.toFixed(2), "秒，平均速度:", avgSpeed.toFixed(2), "MB/s");
-				} catch (error) {
-					console.error("[JS-API] ✗ 第二步失败：流式上传失败:", error);
-					throw new Error("文件上传失败: " + error.message);
-				}
-
-				// 第三步：更新消息状态为已发送
-				console.log("[JS-API] ========== 第三步：更新消息状态 ==========");
-				try {
-					await tauri.core.invoke('save_file_message', {
-						peerId: peerId,
-						fileName: fileName,
-						fileSize: fileSize,
-						filePath: filePath,
-						status: 'sent'
-					});
-
-					console.log("[JS-API] ✓ 第三步完成：文件消息状态已更新为已发送");
-				} catch (saveError) {
-					console.error("[JS-API] ✗ 第三步失败：更新消息失败:", saveError);
-				}
-
-				console.log("[JS-API] ========== 文件发送完整流程结束 ==========");
-				return {
-					success: true,
-					file_id: '',
-					file_name: fileName,
-					file_size: fileSize,
-				};
-			} else {
-				// 桌面端普通路径 - 直接调用后端命令
-				console.log("[JS-API] 桌面端普通路径，调用后端命令");
-
-				// 监听后端传来的进度事件
-				let unlistenProgress;
-				if (tauri.event) {
-					unlistenProgress = await tauri.event.listen('upload_progress', (event) => {
-						// 校验一下事件是否属于当前正在发的文件
-						if (event.payload.file_path === filePath) {
-							const speed = event.payload.speed_mb_s;
-							// 复用你原有的更新 DOM 逻辑
-							const statusDivs = document.querySelectorAll('.file-uploading');
-							statusDivs.forEach(div => {
-								div.textContent = Math.round(speed) + ' MB/s';
-							});
-						}
-					});
-				}
-
-				try {
-					const result = await tauri.core.invoke('send_file', {
-						peerId,
-						peerAddr,
-						filePath
-					});
-					console.log("[JS-API] 文件发送成功:", result);
-
-					// 直接修改 DOM 取消上传中状态
+			// 监听后端传来的进度事件
+			let unlistenProgress;
+			if (tauri.event) {
+				unlistenProgress = await tauri.event.listen('upload_progress', (event) => {
+					const speed = event.payload.speed_mb_s;
+					// 更新 DOM 显示速度
 					const statusDivs = document.querySelectorAll('.file-uploading');
 					statusDivs.forEach(div => {
-						div.textContent = '已发送';
-						div.classList.remove('file-uploading'); // 移除 class 防止后续其他文件上传时误改它
+						div.textContent = Math.round(speed) + ' MB/s';
 					});
+				});
+			}
 
-					return result;
-				} finally {
-					// 非常重要：结束时取消事件监听，防止内存泄漏或导致多次绑定
-					if (unlistenProgress) {
-						unlistenProgress();
-					}
+			try {
+				// 直接调用后端统一命令，后端会自动处理 content URI 和普通路径
+				const result = await tauri.core.invoke('send_file', {
+					peerId,
+					peerAddr,
+					filePath
+				});
+				console.log("[JS-API] 文件发送成功:", result);
+
+				// 修改 DOM 取消上传中状态
+				const statusDivs = document.querySelectorAll('.file-uploading');
+				statusDivs.forEach(div => {
+					div.textContent = '已发送';
+					div.classList.remove('file-uploading');
+				});
+
+				return result;
+			} finally {
+				// 取消事件监听
+				if (unlistenProgress) {
+					unlistenProgress();
 				}
 			}
 
@@ -612,45 +426,7 @@ async function apiSendFile(peerId, peerAddr, file) {
 			console.log("[JS-API] sender_id (我的ID):", myId);
 
 			// 根据设备内存动态计算分块大小
-			let chunkSize;
-			if (navigator.deviceMemory) {
-				// 使用设备内存 API（如果可用）
-				const deviceMemory = navigator.deviceMemory * 1024 * 1024 * 1024; // 转换为字节
-				// 使用可用内存的 80%（大胆使用内存以获得更快的速度）
-				const maxChunkMemory = deviceMemory * 0.8;
-
-				// 根据文件大小选择基础分块大小
-				let baseChunkSize;
-				if (fileSize < 100 * 1024 * 1024) {
-					baseChunkSize = 50 * 1024 * 1024;
-				} else if (fileSize < 500 * 1024 * 1024) {
-					baseChunkSize = 100 * 1024 * 1024;
-				} else if (fileSize < 1024 * 1024 * 1024) {
-					baseChunkSize = 200 * 1024 * 1024;
-				} else if (fileSize < 5 * 1024 * 1024 * 1024) {
-					baseChunkSize = 300 * 1024 * 1024;
-				} else {
-					baseChunkSize = 500 * 1024 * 1024;
-				}
-
-				chunkSize = Math.min(baseChunkSize, Math.floor(maxChunkMemory));
-				console.log("[JS-API] 设备内存:", Math.round(deviceMemory / (1024 * 1024 * 1024)), "GB");
-				console.log("[JS-API] 可用内存预算:", Math.round(maxChunkMemory / (1024 * 1024)), "MB");
-			} else {
-				// 降级方案：根据文件大小选择分块大小
-				if (fileSize < 100 * 1024 * 1024) {
-					chunkSize = 50 * 1024 * 1024;
-				} else if (fileSize < 500 * 1024 * 1024) {
-					chunkSize = 100 * 1024 * 1024;
-				} else if (fileSize < 1024 * 1024 * 1024) {
-					chunkSize = 200 * 1024 * 1024;
-				} else if (fileSize < 5 * 1024 * 1024 * 1024) {
-					chunkSize = 300 * 1024 * 1024;
-				} else {
-					chunkSize = 500 * 1024 * 1024;
-				}
-			}
-
+			const chunkSize = calculateOptimalChunkSize(fileSize);
 			const totalChunks = Math.ceil(fileSize / chunkSize);
 
 			console.log("[JS-API] 计算的分块大小:", Math.round(chunkSize / (1024 * 1024)), "MB, 总分块数:", totalChunks);
