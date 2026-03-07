@@ -239,20 +239,18 @@ function initChat() {
 	initPasteFile();
 
 	// 初始化回到底部按钮
-	initScrollToBottomBtn(); 
+	initScrollToBottomBtn();
 }
 
-// --- 赛博加固版 JS ---
-
-// 1. 打开聊天
+// 打开聊天
 function openChat(peer) {
-	// [检查点]：如果已经是当前聊天的用户，且窗口开着，就别折腾了
+	// 如果已经是当前聊天的用户，且窗口开着，就别折腾了
 	const chatContainer = document.getElementById('chat-container');
 	if (window.currentChatPeer && window.currentChatPeer.id === peer.id && chatContainer.style.display === 'flex') {
 		return;
 	}
 
-	// [关键修复]：如果是在手机端，确保 Hash 状态同步
+	// 如果是在手机端，确保 Hash 状态同步
 	if (window.innerWidth <= 768) {
 		if (window.location.hash !== '#chat') {
 			window.history.pushState({ chatOpen: true }, "", "#chat");
@@ -260,6 +258,12 @@ function openChat(peer) {
 	}
 
 	window.currentChatPeer = peer;
+
+	// 消除未读红点
+	const userLi = document.querySelector(`#user-list li[data-id="${peer.id}"]`);
+	if (userLi) {
+		userLi.classList.remove('has-unread');
+	}
 
 	const chatWithName = document.getElementById('chat-with-name');
 	const chatMessages = document.getElementById('chat-messages');
@@ -351,77 +355,77 @@ async function sendMessage() {
 
 // 添加消息到聊天窗口
 function addMessageToChat(message, isSent) {
-    const chatMessages = document.getElementById('chat-messages');
-    const messageDiv = createMessageElement(message, isSent);
-    chatMessages.appendChild(messageDiv);
-    if (message.timestamp && message.timestamp > (window.lastMessageTimestamp || 0)) {
-        window.lastMessageTimestamp = message.timestamp;
-    }
+	const chatMessages = document.getElementById('chat-messages');
+	const messageDiv = createMessageElement(message, isSent);
+	chatMessages.appendChild(messageDiv);
+	if (message.timestamp && message.timestamp > (window.lastMessageTimestamp || 0)) {
+		window.lastMessageTimestamp = message.timestamp;
+	}
 }
 
 // 创建文件图标元素
 function createFileIcon(message) {
-    const fileInfo = document.createElement('div');
-    fileInfo.className = 'file-info-wrapper';
+	const fileInfo = document.createElement('div');
+	fileInfo.className = 'file-info-wrapper';
 
-    // 1. 图标
-    const fileIcon = document.createElement('span');
-    fileIcon.className = 'file-icon';
-    fileIcon.textContent = '📄';
+	// 1. 图标
+	const fileIcon = document.createElement('span');
+	fileIcon.className = 'file-icon';
+	fileIcon.textContent = '📄';
 
-    // 2. 文件信息
-    const fileInfoText = document.createElement('div');
-    fileInfoText.className = 'file-info';
+	// 2. 文件信息
+	const fileInfoText = document.createElement('div');
+	fileInfoText.className = 'file-info';
 
-    // 文件名
-    const fileName = document.createElement('div');
-    fileName.className = 'file-name';
-    fileName.textContent = message.file_name || message.content;
+	// 文件名
+	const fileName = document.createElement('div');
+	fileName.className = 'file-name';
+	fileName.textContent = message.file_name || message.content;
 
-    // 文件大小
-    const fileSize = document.createElement('div');
-    fileSize.className = 'file-size';
-    fileSize.textContent = message.file_size ? formatFileSize(message.file_size) : '未知大小';
+	// 文件大小
+	const fileSize = document.createElement('div');
+	fileSize.className = 'file-size';
+	fileSize.textContent = message.file_size ? formatFileSize(message.file_size) : '未知大小';
 
-    fileInfoText.appendChild(fileName);
-    fileInfoText.appendChild(fileSize);
-    
-    fileInfo.appendChild(fileIcon);
-    fileInfo.appendChild(fileInfoText);
+	fileInfoText.appendChild(fileName);
+	fileInfoText.appendChild(fileSize);
 
-    return fileInfo;
+	fileInfo.appendChild(fileIcon);
+	fileInfo.appendChild(fileInfoText);
+
+	return fileInfo;
 }
 
 // 检查是否是图片文件
 function isImageFile(fileName) {
-    if (!fileName) return false;
-    
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'];
-    const lowerFileName = fileName.toLowerCase();
-    
-    return imageExtensions.some(ext => lowerFileName.endsWith(ext));
+	if (!fileName) return false;
+
+	const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'];
+	const lowerFileName = fileName.toLowerCase();
+
+	return imageExtensions.some(ext => lowerFileName.endsWith(ext));
 }
 
 // 等待聊天窗口中的所有图片加载完成
 function waitForImagesToLoad(container) {
 	return new Promise((resolve) => {
 		const images = container.querySelectorAll('img');
-		
+
 		if (images.length === 0) {
 			resolve();
 			return;
 		}
-		
+
 		let loadedCount = 0;
 		const totalImages = images.length;
-		
+
 		const checkAllLoaded = () => {
 			loadedCount++;
 			if (loadedCount === totalImages) {
 				resolve();
 			}
 		};
-		
+
 		images.forEach(img => {
 			if (img.complete) {
 				checkAllLoaded();
@@ -430,7 +434,7 @@ function waitForImagesToLoad(container) {
 				img.addEventListener('error', checkAllLoaded); // 即使加载失败也要继续
 			}
 		});
-		
+
 		// 设置超时，避免永久等待
 		setTimeout(() => {
 			resolve();
@@ -442,10 +446,10 @@ function waitForImagesToLoad(container) {
 async function scrollToBottom() {
 	const chatMessages = document.getElementById('chat-messages');
 	if (!chatMessages) return;
-	
+
 	// 等待图片加载完成
 	await waitForImagesToLoad(chatMessages);
-	
+
 	// 滚动到底部
 	chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -456,7 +460,7 @@ async function loadChatHistory(peerId, preserveScroll = false) {
 		// 禁用轮询，避免干扰加载过程
 		const wasPollingEnabled = window.messagePollingEnabled;
 		window.messagePollingEnabled = false;
-		
+
 		// 首次加载，获取最新的10条消息
 		const messages = await apiGetChatHistory(peerId, 10, 0);
 
@@ -492,37 +496,37 @@ async function loadChatHistory(peerId, preserveScroll = false) {
 		// 首次加载时，如果没有滚动条，继续加载更多消息直到出现滚动条或没有更多消息
 		if (!preserveScroll) {
 			let hasScrollbar = chatMessages.scrollHeight > chatMessages.clientHeight;
-			
+
 			while (!hasScrollbar && window.currentChatMessages.hasMore) {
 				const offset = window.currentChatMessages.loadedCount;
 				const moreMessages = await apiGetChatHistory(peerId, 10, offset);
-				
+
 				if (moreMessages.length === 0) {
 					window.currentChatMessages.hasMore = false;
 					break;
 				}
-				
+
 				// 在顶部插入消息
 				for (let i = moreMessages.length - 1; i >= 0; i--) {
 					const msg = moreMessages[i];
 					const messageDiv = createMessageElement(msg, msg.from_id === 'me');
 					chatMessages.insertBefore(messageDiv, chatMessages.firstChild);
 				}
-				
+
 				window.currentChatMessages.loadedCount += moreMessages.length;
-				
+
 				if (moreMessages.length < 10) {
 					window.currentChatMessages.hasMore = false;
 					break;
 				}
-				
+
 				// 等待图片加载
 				await waitForImagesToLoad(chatMessages);
-				
+
 				// 检查是否出现滚动条
 				hasScrollbar = chatMessages.scrollHeight > chatMessages.clientHeight;
 			}
-			
+
 			// 自动加载完成后，滚动到底部
 			await scrollToBottom();
 		} else {
@@ -542,7 +546,7 @@ async function loadChatHistory(peerId, preserveScroll = false) {
 		if (!preserveScroll && !window.scrollListenerAttached) {
 			initScrollListener();
 		}
-		
+
 		// 恢复轮询
 		window.messagePollingEnabled = wasPollingEnabled;
 	} catch (e) {
@@ -555,85 +559,85 @@ async function loadChatHistory(peerId, preserveScroll = false) {
 // 初始化滚动监听器（懒加载）
 function initScrollListener() {
 	const chatMessages = document.getElementById('chat-messages');
-	
+
 	// 移除旧的监听器（如果存在）
 	if (window.scrollListenerAttached) {
 		chatMessages.removeEventListener('scroll', window.handleChatScroll);
 	}
-	
+
 	// 定义滚动处理函数
 	window.handleChatScroll = async function() {
 		if (!window.currentChatMessages) {
 			return;
 		}
-		
+
 		if (window.currentChatMessages.isLoading) {
 			return;
 		}
-		
+
 		const scrollTop = chatMessages.scrollTop;
 		const scrollHeight = chatMessages.scrollHeight;
 		const clientHeight = chatMessages.clientHeight;
-		
+
 		// 检查是否滚动到底部（距离底部小于100px）
 		const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
-		
+
 		// 如果滚动到底部，触发一次刷新（检查新消息）
-if (isAtBottom && window.lastScrollWasNotAtBottom) {
-		console.log('[UI] 滚动到底部，检查新消息');
-		window.currentChatMessages.isLoading = true;
-		try {
+		if (isAtBottom && window.lastScrollWasNotAtBottom) {
+			console.log('[UI] 滚动到底部，检查新消息');
+			window.currentChatMessages.isLoading = true;
+			try {
 				// 同样只取最新的小批量，靠时间戳过滤
 				const latestMessages = await apiGetChatHistory(window.currentChatMessages.peerId, 20, 0);
 				const newMessages = latestMessages.filter(msg => msg.timestamp > (window.lastMessageTimestamp || 0));
 
 				if (newMessages.length > 0) {
-						for (const msg of newMessages) {
-								addMessageToChat(msg, msg.from_id === 'me');
-								if (msg.timestamp > (window.lastMessageTimestamp || 0)) {
-										window.lastMessageTimestamp = msg.timestamp;
-								}
+					for (const msg of newMessages) {
+						addMessageToChat(msg, msg.from_id === 'me');
+						if (msg.timestamp > (window.lastMessageTimestamp || 0)) {
+							window.lastMessageTimestamp = msg.timestamp;
 						}
-						window.currentChatMessages.loadedCount += newMessages.length;
-						window.currentChatMessages.totalCount += newMessages.length;
-						await scrollToBottom();
+					}
+					window.currentChatMessages.loadedCount += newMessages.length;
+					window.currentChatMessages.totalCount += newMessages.length;
+					await scrollToBottom();
 				}
-		} catch (e) {
+			} catch (e) {
 				console.error('[UI] 检查新消息失败:', e);
-		} finally {
+			} finally {
 				window.currentChatMessages.isLoading = false;
+			}
 		}
-}
-		
+
 		// 记录当前是否在底部
 		window.lastScrollWasNotAtBottom = !isAtBottom;
-		
+
 		if (!window.currentChatMessages.hasMore) {
 			return;
 		}
-		
+
 		// 检查是否滚动到顶部（距离顶部小于100px）
 		// 同时确保不是刚加载完（scrollHeight > clientHeight 说明有滚动条）
 		const hasScrollbar = scrollHeight > clientHeight;
 		if (hasScrollbar && scrollTop < 100) {
 			console.log('[UI] 触发懒加载，加载更多历史消息');
-			
+
 			window.currentChatMessages.isLoading = true;
-			
+
 			// 暂时禁用消息轮询，防止干扰
 			const wasPollingEnabled = window.messagePollingEnabled;
 			window.messagePollingEnabled = false;
-			
+
 			try {
 				// 加载更多消息
 				const offset = window.currentChatMessages.loadedCount;
-				
+
 				const moreMessages = await apiGetChatHistory(
-					window.currentChatMessages.peerId, 
-					10, 
+					window.currentChatMessages.peerId,
+					10,
 					offset
 				);
-				
+
 				if (moreMessages.length === 0) {
 					console.log('[UI] 没有更多历史消息了');
 					window.currentChatMessages.hasMore = false;
@@ -641,41 +645,41 @@ if (isAtBottom && window.lastScrollWasNotAtBottom) {
 					window.messagePollingEnabled = wasPollingEnabled;
 					return;
 				}
-				
+
 				// 保存当前滚动位置
 				const oldScrollTop = chatMessages.scrollTop;
 				const oldScrollHeight = chatMessages.scrollHeight;
-				
+
 				// 在顶部插入消息（倒序插入）
 				for (let i = moreMessages.length - 1; i >= 0; i--) {
 					const msg = moreMessages[i];
 					const messageDiv = createMessageElement(msg, msg.from_id === 'me');
 					chatMessages.insertBefore(messageDiv, chatMessages.firstChild);
 				}
-				
+
 				// 更新已加载数量
 				window.currentChatMessages.loadedCount += moreMessages.length;
-				
+
 				// 如果返回的消息少于10条，说明没有更多了
 				if (moreMessages.length < 10) {
 					window.currentChatMessages.hasMore = false;
 				}
-				
+
 				// 恢复滚动位置（保持在原来的消息位置）
 				// 使用 requestAnimationFrame 确保 DOM 更新完成后再设置滚动位置
 				requestAnimationFrame(() => {
 					const newScrollHeight = chatMessages.scrollHeight;
 					const addedHeight = newScrollHeight - oldScrollHeight;
 					const newScrollTop = oldScrollTop + addedHeight;
-					
+
 					chatMessages.scrollTop = newScrollTop;
-					
+
 					// 恢复消息轮询
 					setTimeout(() => {
 						window.messagePollingEnabled = wasPollingEnabled;
 					}, 100);
 				});
-				
+
 			} catch (e) {
 				console.error('[UI] 加载更多消息失败:', e);
 				window.messagePollingEnabled = wasPollingEnabled;
@@ -684,7 +688,7 @@ if (isAtBottom && window.lastScrollWasNotAtBottom) {
 			}
 		}
 	};
-	
+
 	// 添加滚动监听器
 	chatMessages.addEventListener('scroll', window.handleChatScroll);
 	window.scrollListenerAttached = true;
@@ -692,124 +696,124 @@ if (isAtBottom && window.lastScrollWasNotAtBottom) {
 
 // 创建消息元素（从 addMessageToChat 中提取）
 function createMessageElement(message, isSent) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+	const messageDiv = document.createElement('div');
+	messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
 
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
+	const contentDiv = document.createElement('div');
+	contentDiv.className = 'message-content';
 
-    if (message.msg_type === 'file') {
-        const fileContainer = document.createElement('div');
-        fileContainer.className = 'message-file';
+	if (message.msg_type === 'file') {
+		const fileContainer = document.createElement('div');
+		fileContainer.className = 'message-file';
 
-        // 检查是否是图片文件
-        const isImage = isImageFile(message.file_name || message.content);
+		// 检查是否是图片文件
+		const isImage = isImageFile(message.file_name || message.content);
 
-        if (isImage && message.file_path && (message.file_status === 'sent' || message.file_status === 'accepted')) {
-            // 图片预览
-            const imgPreview = document.createElement('div');
-            imgPreview.className = 'image-preview';
+		if (isImage && message.file_path && (message.file_status === 'sent' || message.file_status === 'accepted')) {
+			// 图片预览
+			const imgPreview = document.createElement('div');
+			imgPreview.className = 'image-preview';
 
-            const img = document.createElement('img');
-            
-            const tauri = window.__TAURI__;
-            if (tauri) {
-                // 桌面端：使用 convertFileSrc
-                const assetUrl = tauri.core.convertFileSrc(message.file_path);
-                img.src = assetUrl;
-            } else {
-                // Web 端：使用下载 API
-                if (message.file_id) {
-                    img.src = `/api/download/${message.file_id}`;
-                }
-            }
+			const img = document.createElement('img');
 
-            img.alt = message.file_name || message.content;
-            img.loading = 'lazy';
-            
-            // 图片加载失败时显示文件图标
-            img.onerror = () => {
-                imgPreview.innerHTML = '';
-                imgPreview.appendChild(createFileIcon(message));
-            };
+			const tauri = window.__TAURI__;
+			if (tauri) {
+				// 桌面端：使用 convertFileSrc
+				const assetUrl = tauri.core.convertFileSrc(message.file_path);
+				img.src = assetUrl;
+			} else {
+				// Web 端：使用下载 API
+				if (message.file_id) {
+					img.src = `/api/download/${message.file_id}`;
+				}
+			}
 
-            imgPreview.appendChild(img);
-            fileContainer.appendChild(imgPreview);
-        } else {
-            // 非图片或未完成的文件：显示文件图标
-            fileContainer.appendChild(createFileIcon(message));
-        }
+			img.alt = message.file_name || message.content;
+			img.loading = 'lazy';
 
-        contentDiv.appendChild(fileContainer);
+			// 图片加载失败时显示文件图标
+			img.onerror = () => {
+				imgPreview.innerHTML = '';
+				imgPreview.appendChild(createFileIcon(message));
+			};
 
-        // 3. 状态标签 (保留类名，供默认模式显示圆点，伪装模式显示注释)
-        const fileStatus = message.file_status || 'accepted';
-        const statusDiv = document.createElement('div');
-        if (fileStatus === 'downloading') {
-            statusDiv.className = 'file-downloading';
-            const speed = message.transfer_speed ? Math.round(message.transfer_speed) + ' MB/s' : '下载中...';
-            statusDiv.textContent = speed;
-        } else if (fileStatus === 'uploading') {
-            statusDiv.className = 'file-uploading';
-            const speed = message.transfer_speed ? Math.round(message.transfer_speed) + ' MB/s' : '上传中...';
-            statusDiv.textContent = speed;
-        } else if (fileStatus === 'accepted' && !isSent) {
-            statusDiv.className = 'file-finish';
-            statusDiv.textContent = 'finish';
-        }
+			imgPreview.appendChild(img);
+			fileContainer.appendChild(imgPreview);
+		} else {
+			// 非图片或未完成的文件：显示文件图标
+			fileContainer.appendChild(createFileIcon(message));
+		}
 
-        if (statusDiv.className) {
-            contentDiv.appendChild(statusDiv);
-        }
+		contentDiv.appendChild(fileContainer);
 
-        // 对于已完成的文件（sent 或 accepted），添加点击处理
-        if (fileStatus === 'sent' || fileStatus === 'accepted') {
-            fileContainer.style.cursor = 'pointer';
-            
-            const tauri = window.__TAURI__;
-            if (tauri) {
-                // 桌面端/Android：点击打开文件所在位置或分享
-                if (message.file_path) {
-                    // 检查是否是 Android
-                    const isAndroid = navigator.userAgent.includes('Android');
-                    
-                    if (isAndroid) {
-                        // Android 端：所有文件都支持分享到其他应用
-                        fileContainer.addEventListener('click', async () => {
-                            try {
-                                await apiShareFileToOtherApp(message.file_path);
-                            } catch (e) {
-                                alert('分享失败: ' + e.message);
-                            }
-                        });
-                    } else {
-                        // 桌面端：点击打开文件位置
-                        fileContainer.addEventListener('click', () => openFileLocation(message.file_path));
-                    }
-                }
-            } else {
-                // Web 端：点击下载文件
-                if (message.file_id) {
-                    fileContainer.addEventListener('click', () => downloadFile(message.file_id, message.file_name || message.content));
-                }
-            }
-        }
-    } else {
-        const textSpan = document.createElement('span');
-        textSpan.className = 'message-text';
-        textSpan.textContent = message.content;
-        contentDiv.appendChild(textSpan);
-    }
+		// 3. 状态标签 (保留类名，供默认模式显示圆点，伪装模式显示注释)
+		const fileStatus = message.file_status || 'accepted';
+		const statusDiv = document.createElement('div');
+		if (fileStatus === 'downloading') {
+			statusDiv.className = 'file-downloading';
+			const speed = message.transfer_speed ? Math.round(message.transfer_speed) + ' MB/s' : '下载中...';
+			statusDiv.textContent = speed;
+		} else if (fileStatus === 'uploading') {
+			statusDiv.className = 'file-uploading';
+			const speed = message.transfer_speed ? Math.round(message.transfer_speed) + ' MB/s' : '上传中...';
+			statusDiv.textContent = speed;
+		} else if (fileStatus === 'accepted' && !isSent) {
+			statusDiv.className = 'file-finish';
+			statusDiv.textContent = 'finish';
+		}
 
-    const timeDiv = document.createElement('div');
-    timeDiv.className = 'message-time';
-    const date = new Date(message.timestamp * 1000);
-    timeDiv.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+		if (statusDiv.className) {
+			contentDiv.appendChild(statusDiv);
+		}
 
-    messageDiv.appendChild(contentDiv);
-    messageDiv.appendChild(timeDiv);
-    
-    return messageDiv;
+		// 对于已完成的文件（sent 或 accepted），添加点击处理
+		if (fileStatus === 'sent' || fileStatus === 'accepted') {
+			fileContainer.style.cursor = 'pointer';
+
+			const tauri = window.__TAURI__;
+			if (tauri) {
+				// 桌面端/Android：点击打开文件所在位置或分享
+				if (message.file_path) {
+					// 检查是否是 Android
+					const isAndroid = navigator.userAgent.includes('Android');
+
+					if (isAndroid) {
+						// Android 端：所有文件都支持分享到其他应用
+						fileContainer.addEventListener('click', async () => {
+							try {
+								await apiShareFileToOtherApp(message.file_path);
+							} catch (e) {
+								alert('分享失败: ' + e.message);
+							}
+						});
+					} else {
+						// 桌面端：点击打开文件位置
+						fileContainer.addEventListener('click', () => openFileLocation(message.file_path));
+					}
+				}
+			} else {
+				// Web 端：点击下载文件
+				if (message.file_id) {
+					fileContainer.addEventListener('click', () => downloadFile(message.file_id, message.file_name || message.content));
+				}
+			}
+		}
+	} else {
+		const textSpan = document.createElement('span');
+		textSpan.className = 'message-text';
+		textSpan.textContent = message.content;
+		contentDiv.appendChild(textSpan);
+	}
+
+	const timeDiv = document.createElement('div');
+	timeDiv.className = 'message-time';
+	const date = new Date(message.timestamp * 1000);
+	timeDiv.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+	messageDiv.appendChild(contentDiv);
+	messageDiv.appendChild(timeDiv);
+
+	return messageDiv;
 }
 
 // 接收到新消息
@@ -842,18 +846,25 @@ function onReceiveMessage(message) {
 				setTimeout(async () => {
 					await scrollToBottom();
 				}, 50);
-    } else {
-        // 【新增逻辑】如果用户往上翻看历史记录时来新消息了，点亮小红点
-        const unreadDot = document.getElementById('unread-dot');
-        const scrollBtn = document.getElementById('scroll-to-bottom-btn');
-        if (unreadDot && scrollBtn) {
-            scrollBtn.classList.add('show'); // 确保按钮显示出来
-            unreadDot.classList.add('show'); // 亮起红点
-        }
-    }
+			} else {
+				// 【新增逻辑】如果用户往上翻看历史记录时来新消息了，点亮小红点
+				const unreadDot = document.getElementById('unread-dot');
+				const scrollBtn = document.getElementById('scroll-to-bottom-btn');
+				if (unreadDot && scrollBtn) {
+					scrollBtn.classList.add('show'); // 确保按钮显示出来
+					unreadDot.classList.add('show'); // 亮起红点
+				}
+			}
 		}
 	} else {
 		console.log('[UI] ✗ 不匹配当前聊天对象');
+		const userLi = document.querySelector(`#user-list li[data-id="${message.from_id}"]`);
+		if (userLi) {
+			userLi.classList.add('has-unread');
+			// 把有新消息的用户置顶排到列表最上面，体验更好
+			const list = document.getElementById('user-list');
+			list.prepend(userLi);
+		}
 		console.log('[UI]   - message.from_id:', message.from_id);
 		console.log('[UI]   - currentChatPeer.id:', window.currentChatPeer ? window.currentChatPeer.id : 'null');
 	}
@@ -869,7 +880,7 @@ async function sendFileByPath(filePath) {
 	if (!window.currentChatPeer) return;
 
 	const tauri = window.__TAURI__;
-	
+
 	if (!tauri) {
 		console.error('[UI] sendFileByPath 只能在桌面端使用');
 		return;
@@ -888,7 +899,7 @@ async function sendFileByPath(filePath) {
 
 		// 获取文件名
 		const fileName = actualPath.split(/[\\/]/).pop();
-		
+
 		// 获取文件大小
 		let fileSize = 0;
 		try {
@@ -952,7 +963,7 @@ async function sendFile(file) {
 		// 如果传入了 file 参数（拖拽或粘贴），需要特殊处理
 		if (file) {
 			console.log('[UI] 处理拖拽/粘贴的文件:', file.name, file.size);
-			
+
 			// 桌面端拖拽/粘贴时，我们需要先将文件保存到临时目录
 			// 然后再调用 send_file 命令
 			try {
@@ -1165,22 +1176,22 @@ function formatFileSize(bytes) {
 async function downloadFile(fileId, fileName) {
 	try {
 		const url = `/api/download/${fileId}`;
-		
+
 		// 使用 fetch 来获取下载进度
 		const response = await fetch(url);
 		if (!response.ok) {
 			throw new Error(`HTTP ${response.status}`);
 		}
-		
+
 		const contentLength = response.headers.get('content-length');
 		const totalSize = parseInt(contentLength, 10);
-		
+
 		const reader = response.body.getReader();
 		const chunks = [];
 		let receivedLength = 0;
 		const startTime = Date.now();
 		let lastLogTime = startTime;
-		
+
 		// 更新下载速度显示
 		const updateDownloadSpeed = () => {
 			const elapsed = (Date.now() - startTime) / 1000;
@@ -1192,15 +1203,15 @@ async function downloadFile(fileId, fileName) {
 				});
 			}
 		};
-		
+
 		while (true) {
-			const {done, value} = await reader.read();
-			
+			const { done, value } = await reader.read();
+
 			if (done) break;
-			
+
 			chunks.push(value);
 			receivedLength += value.length;
-			
+
 			// 每秒更新一次速度显示
 			const now = Date.now();
 			if (now - lastLogTime > 1000) {
@@ -1208,7 +1219,7 @@ async function downloadFile(fileId, fileName) {
 				lastLogTime = now;
 			}
 		}
-		
+
 		// 合并所有分块
 		const chunksAll = new Uint8Array(receivedLength);
 		let position = 0;
@@ -1216,7 +1227,7 @@ async function downloadFile(fileId, fileName) {
 			chunksAll.set(chunk, position);
 			position += chunk.length;
 		}
-		
+
 		// 创建 Blob 并下载
 		const blob = new Blob([chunksAll]);
 		const a = document.createElement('a');
@@ -1226,7 +1237,7 @@ async function downloadFile(fileId, fileName) {
 		a.click();
 		document.body.removeChild(a);
 		URL.revokeObjectURL(a.href);
-		
+
 		const totalTime = (Date.now() - startTime) / 1000;
 		const avgSpeed = (receivedLength / (1024 * 1024)) / totalTime;
 		console.log('[UI] ✓ 文件下载完成:', fileName, '耗时:', totalTime.toFixed(2), '秒，平均速度:', avgSpeed.toFixed(2), 'MB/s');
@@ -1239,12 +1250,12 @@ async function downloadFile(fileId, fileName) {
 // 打开文件所在位置（仅桌面端）
 async function openFileLocation(filePath) {
 	const tauri = window.__TAURI__;
-	
+
 	if (!tauri) {
 		alert('此功能仅在桌面端支持');
 		return;
 	}
-	
+
 	try {
 		await tauri.core.invoke('open_file_location', { filePath: filePath });
 		console.log('[UI] ✓ 打开文件位置:', filePath);
@@ -1583,11 +1594,11 @@ function initDragAndDrop(chatContainer) {
 	if (tauri) {
 		// 桌面端：使用 Tauri 的原生拖拽事件（可以获取文件路径）
 		console.log('[UI] 使用 Tauri 原生拖拽事件');
-		
+
 		// 监听 Tauri 的文件拖放事件
 		tauri.event.listen('tauri://drag-drop', async (event) => {
 			console.log('[UI] Tauri 拖放事件:', event);
-			
+
 			if (!window.currentChatPeer) {
 				console.log('[UI] 没有打开聊天窗口，忽略拖放');
 				return;
@@ -1596,7 +1607,7 @@ function initDragAndDrop(chatContainer) {
 			const paths = event.payload.paths;
 			if (paths && paths.length > 0) {
 				console.log('[UI] 拖放的文件路径:', paths);
-				
+
 				// 依次发送所有文件（使用文件路径，零拷贝）
 				for (const filePath of paths) {
 					console.log('[UI] 发送文件:', filePath);
@@ -1659,10 +1670,10 @@ function initDragAndDrop(chatContainer) {
 			}
 
 			const files = e.dataTransfer.files;
-			
+
 			if (files && files.length > 0) {
 				console.log('[UI] 拖放了', files.length, '个文件');
-				
+
 				// 依次发送所有文件
 				for (let i = 0; i < files.length; i++) {
 					const file = files[i];
@@ -1695,11 +1706,11 @@ function initPasteFile() {
 			try {
 				console.log('[UI] 尝试从剪贴板读取文件路径');
 				const filePaths = await tauri.core.invoke('read_clipboard_files');
-				
+
 				if (filePaths && filePaths.length > 0) {
 					console.log('[UI] 剪贴板中的文件路径:', filePaths);
 					e.preventDefault(); // 阻止默认粘贴行为
-					
+
 					// 使用零拷贝方式发送文件
 					for (const filePath of filePaths) {
 						await sendFileByPath(filePath);
@@ -1757,17 +1768,17 @@ function initPasteFile() {
 
 // 初始化“回到底部”悬浮按钮
 function initScrollToBottomBtn() {
-    const chatContainer = document.querySelector('.chat-container');
-    const chatMessages = document.getElementById('chat-messages');
-    
-    if (!chatContainer || !chatMessages) return;
+	const chatContainer = document.querySelector('.chat-container');
+	const chatMessages = document.getElementById('chat-messages');
 
-    // 1. 动态创建按钮 DOM
-    const btn = document.createElement('div');
-    btn.id = 'scroll-to-bottom-btn';
-    btn.className = 'scroll-bottom-btn';
-    // 注入一个向下箭头的 SVG 图标 和 未读小红点
-    btn.innerHTML = `
+	if (!chatContainer || !chatMessages) return;
+
+	// 1. 动态创建按钮 DOM
+	const btn = document.createElement('div');
+	btn.id = 'scroll-to-bottom-btn';
+	btn.className = 'scroll-bottom-btn';
+	// 注入一个向下箭头的 SVG 图标 和 未读小红点
+	btn.innerHTML = `
         <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <polyline points="19 12 12 19 5 12"></polyline>
@@ -1775,30 +1786,30 @@ function initScrollToBottomBtn() {
         <div id="unread-dot" class="unread-dot"></div>
     `;
 
-    // 将按钮插入到 chat-messages 的平级，输入框的上方
-    const inputContainer = document.querySelector('.chat-input-container');
-    chatContainer.insertBefore(btn, inputContainer);
+	// 将按钮插入到 chat-messages 的平级，输入框的上方
+	const inputContainer = document.querySelector('.chat-input-container');
+	inputContainer.appendChild(btn);
 
-    // 2. 绑定点击事件：平滑滚动到底部
-    btn.addEventListener('click', () => {
-        chatMessages.scrollTo({
-            top: chatMessages.scrollHeight,
-            behavior: 'smooth' // 增加平滑滚动效果
-        });
-        // 隐藏未读红点
-        document.getElementById('unread-dot').classList.remove('show');
-    });
+	// 2. 绑定点击事件：平滑滚动到底部
+	btn.addEventListener('click', () => {
+		chatMessages.scrollTo({
+			top: chatMessages.scrollHeight,
+			behavior: 'smooth' // 增加平滑滚动效果
+		});
+		// 隐藏未读红点
+		document.getElementById('unread-dot').classList.remove('show');
+	});
 
-    // 3. 监听滚动事件，控制显示/隐藏
-    chatMessages.addEventListener('scroll', () => {
-        // 距离底部 150px 以内都认为是在底部
-        const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 150;
+	// 3. 监听滚动事件，控制显示/隐藏
+	chatMessages.addEventListener('scroll', () => {
+		// 距离底部 150px 以内都认为是在底部
+		const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 150;
 
-        if (isAtBottom) {
-            btn.classList.remove('show');
-            document.getElementById('unread-dot').classList.remove('show'); // 到达底部自动消除红点
-        } else {
-            btn.classList.add('show');
-        }
-    });
+		if (isAtBottom) {
+			btn.classList.remove('show');
+			document.getElementById('unread-dot').classList.remove('show'); // 到达底部自动消除红点
+		} else {
+			btn.classList.add('show');
+		}
+	});
 }

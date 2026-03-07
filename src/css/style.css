@@ -425,9 +425,12 @@ h2::before {
 
 /* --- 消息普通文本内容 --- */
 .message-text {
-	white-space: pre-wrap;   /* 核心：保留换行符和缩进空格，且允许折行 */
-	word-break: break-word;  /* 兼容处理：防止过长的 URL 或长单词不换行 */
-	font-family: inherit;    /* 继承输入框的字体，确保缩进视觉一致 */
+	white-space: pre-wrap;
+	/* 核心：保留换行符和缩进空格，且允许折行 */
+	word-break: break-word;
+	/* 兼容处理：防止过长的 URL 或长单词不换行 */
+	font-family: inherit;
+	/* 继承输入框的字体，确保缩进视觉一致 */
 }
 
 /* 2. 接收的消息 (左侧) - 实心深灰 */
@@ -646,8 +649,11 @@ h2::before {
 /* --- 附件选择按钮 --- */
 #attach-file-btn {
 	position: absolute;
-	/* 【新增】绝对定位 */
-	top: 25px;
+	/* 绝对定位 */
+	top: auto;
+	/* 清除原有遗留的 top */
+	bottom: 29px;
+	/* 定位到底部：15px(容器padding) + 14px(输入框内边距) */
 	/* 容器 top-padding(15) + 输入框内部上偏移(10) */
 	left: 35px;
 	/* 容器 left-padding(25) + 输入框内部左偏移(10) */
@@ -694,6 +700,8 @@ h2::before {
 	transition: all 0.3s;
 	font-family: inherit;
 	resize: none;
+	padding: 18px 105px 18px 55px;
+	/* 上下内边距改为 18px，让首行文字完美居中 */
 	min-height: 60px;
 	/* 稍微加高一点，确保能装下内部按钮 */
 	max-height: 200px;
@@ -711,18 +719,27 @@ h2::before {
 #send-btn {
 	position: absolute;
 	/* 【新增】绝对定位 */
-	top: 23px;
+	top: auto;
+	/* 清除原有遗留的 top */
+	bottom: 29px;
+	/* 和左侧附件按钮处于同一水平线 */
 	/* 稍微微调，使其和第一行文字视觉垂直居中 */
 	right: 40px;
 	/* 容器 right-padding(25) + 输入框内部右偏移(15) */
 	z-index: 10;
+	height: 32px;
+	/* 强制指定 32px，与左侧按钮高度绝对一致 */
 
 	background: rgba(98, 114, 164, 0.2);
 	color: var(--primary);
 	border: 1px solid rgba(189, 147, 249, 0.3);
 
 	/* 调整尺寸以适应输入框内部 */
-	padding: 6px 18px;
+	padding: 0 18px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
 	border-radius: 8px;
 	/* 圆角稍微改小显得更灵动 */
 
@@ -945,34 +962,63 @@ h2::before {
 }
 
 /* =========================================
+   左侧用户列表未读红点
+   ========================================= */
+#user-list li {
+	position: relative;
+	/* 确保红点能精准定位在右上角 */
+}
+
+#user-list li::after {
+	content: '';
+	position: absolute;
+	top: 12px;
+	/* 位于卡片右上角 */
+	right: 12px;
+	width: 8px;
+	height: 8px;
+	background: #ff5555;
+	border-radius: 50%;
+	box-shadow: 0 0 8px rgba(255, 85, 85, 0.6);
+	transform: scale(0);
+	transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+	pointer-events: none;
+	/* 防止挡住点击事件 */
+}
+
+/* 激活红点时的动画 */
+#user-list li.has-unread::after {
+	transform: scale(1);
+}
+
+/* =========================================
    回到底部悬浮按钮 (Scroll to Bottom FAB)
    ========================================= */
 .scroll-bottom-btn {
 	position: absolute;
-	/* 根据你的输入框高度动态定位，通常 90px 刚好在输入框上方 */
-	bottom: 90px;
-	right: 25px;
+	/* 100%代表以输入框容器的顶部为基准，再加上15px的悬浮间距 */
+	bottom: calc(100% + 15px);
+	right: 40px;
+	/* 和右下角的发送按钮绝对对齐 */
+
 	width: 42px;
 	height: 42px;
 	border-radius: 50%;
-	
-	/* 完美复用设置面板的玻璃拟态背景 */
-	background: rgba(40, 42, 54, 0.85); 
+	background: rgba(40, 42, 54, 0.85);
 	backdrop-filter: blur(10px);
-	border: 1px solid rgba(189, 147, 249, 0.3); /* 细微的紫色描边 */
-	color: var(--primary); /* 默认紫色图标 */
-	
+	border: 1px solid rgba(189, 147, 249, 0.3);
+	color: var(--primary);
+
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	cursor: pointer;
 	z-index: 100;
-	
-	/* 隐藏状态的动画起点（向下偏移 + 透明） */
+
 	opacity: 0;
 	visibility: hidden;
 	transform: translateY(15px) scale(0.9);
-	transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); /* 果冻回弹动画 */
+	transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
@@ -984,6 +1030,12 @@ h2::before {
 }
 
 /* 悬停状态：实心紫 + 发光 */
+.scroll-bottom-btn.show {
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(0) scale(1);
+}
+
 .scroll-bottom-btn:hover {
 	background: var(--primary);
 	color: #fff;
@@ -998,9 +1050,11 @@ h2::before {
 	right: 0;
 	width: 10px;
 	height: 10px;
-	background: #ff5555; /* Dracula 红色 */
+	background: #ff5555;
+	/* Dracula 红色 */
 	border-radius: 50%;
-	border: 2px solid #282a36; /* 边框与底色同色，产生镂空感 */
+	border: 2px solid #282a36;
+	/* 边框与底色同色，产生镂空感 */
 	opacity: 0;
 	transform: scale(0);
 	transition: all 0.3s ease;
@@ -1009,16 +1063,6 @@ h2::before {
 .unread-dot.show {
 	opacity: 1;
 	transform: scale(1);
-}
-
-/* 📱 移动端适配 */
-@media (max-width: 768px) {
-	.scroll-bottom-btn {
-		bottom: 80px; /* 移动端输入框较小，位置稍微下调 */
-		right: 15px;
-		width: 38px;
-		height: 38px;
-	}
 }
 
 /* =========================================
@@ -1034,7 +1078,8 @@ h2::before {
 	bottom: 0;
 	background: rgba(0, 0, 0, 0.6);
 	backdrop-filter: blur(5px);
-	z-index: 2000; /* 确保在最顶层 */
+	z-index: 2000;
+	/* 确保在最顶层 */
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1042,17 +1087,24 @@ h2::before {
 }
 
 @keyframes fadeIn {
-	from { opacity: 0; }
-	to { opacity: 1; }
+	from {
+		opacity: 0;
+	}
+
+	to {
+		opacity: 1;
+	}
 }
 
 /* 2. 弹窗主面板：复用设置面板的玻璃拟态风格 */
 .share-dialog-content {
 	width: 380px;
 	max-width: 90%;
-	background: rgba(40, 42, 54, 0.95); /* var(--bg-panel) */
+	background: rgba(40, 42, 54, 0.95);
+	/* var(--bg-panel) */
 	backdrop-filter: blur(20px);
-	border: 1px solid rgba(189, 147, 249, 0.3); /* 紫色微弱描边 */
+	border: 1px solid rgba(189, 147, 249, 0.3);
+	/* 紫色微弱描边 */
 	border-radius: 20px;
 	padding: 30px;
 	box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
@@ -1083,7 +1135,8 @@ h2::before {
 	list-style: none;
 	padding: 0;
 	margin: 0 0 20px 0;
-	max-height: 250px; /* 防止用户太多撑爆屏幕 */
+	max-height: 250px;
+	/* 防止用户太多撑爆屏幕 */
 	overflow-y: auto;
 	display: flex;
 	flex-direction: column;
@@ -1094,6 +1147,7 @@ h2::before {
 .share-user-list::-webkit-scrollbar {
 	width: 4px;
 }
+
 .share-user-list::-webkit-scrollbar-thumb {
 	background: rgba(255, 255, 255, 0.1);
 	border-radius: 4px;
@@ -1120,7 +1174,8 @@ h2::before {
 	display: inline-block;
 	width: 8px;
 	height: 8px;
-	background: #50fa7b; /* 你的 success 绿 */
+	background: #50fa7b;
+	/* 你的 success 绿 */
 	border-radius: 50%;
 	margin-right: 12px;
 	box-shadow: 0 0 8px rgba(80, 250, 123, 0.4);
@@ -1144,9 +1199,12 @@ h2::before {
 	border: 1px dashed rgba(255, 255, 255, 0.15);
 	cursor: default;
 }
+
 .share-user-list li.no-users::before {
-	display: none; /* 隐藏绿点 */
+	display: none;
+	/* 隐藏绿点 */
 }
+
 .share-user-list li.no-users:hover {
 	background: transparent;
 	border-color: rgba(255, 255, 255, 0.15);
@@ -1256,11 +1314,14 @@ h2::before {
 
 	#attach-file-btn {
 		/* 移动端绝对定位坐标重算：容器10px + 内偏8px */
-		top: 18px; 
+		top: auto;
+		bottom: calc(10px + env(safe-area-inset-bottom) + 11px);
+		right: 18px;
 		left: 18px;
 		width: 30px;
-		height: 30px;
+		height: 32px !important;
 		font-size: 15px;
+		padding: 0 12px !important;
 	}
 
 	#chat-input {
@@ -1272,15 +1333,24 @@ h2::before {
 
 	#send-btn {
 		/* 移动端发送按钮绝对定位 */
-		top: 16px; 
+		top: 16px;
 		right: 18px;
-		
+
 		/* 覆盖原移动端强制设定的死板尺寸 */
 		min-width: 60px !important;
-		height: 32px !important; 
+		height: 32px !important;
 		padding: 0 12px !important;
 		font-size: 13px;
 		border-radius: 8px;
+	}
+
+	.scroll-bottom-btn {
+		right: 18px;
+		/* 移动端和发送按钮对齐 */
+		bottom: calc(100% + 10px);
+		/* 移动端间距缩小一点 */
+		width: 38px;
+		height: 38px;
 	}
 }
 
@@ -1432,87 +1502,87 @@ h2::before {
 
 /* Android 分享对话框样式 */
 .share-dialog {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10000;
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.7);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 10000;
 }
 
 .share-dialog-content {
-    background: var(--bg-panel);
-    border-radius: var(--radius-lg);
-    padding: 24px;
-    max-width: 400px;
-    width: 90%;
-    max-height: 80vh;
-    overflow-y: auto;
+	background: var(--bg-panel);
+	border-radius: var(--radius-lg);
+	padding: 24px;
+	max-width: 400px;
+	width: 90%;
+	max-height: 80vh;
+	overflow-y: auto;
 }
 
 .share-dialog-content h3 {
-    margin: 0 0 12px 0;
-    font-size: 20px;
-    color: var(--text-main);
+	margin: 0 0 12px 0;
+	font-size: 20px;
+	color: var(--text-main);
 }
 
 .share-dialog-content p {
-    margin: 0 0 16px 0;
-    color: var(--text-dim);
-    font-size: 14px;
+	margin: 0 0 16px 0;
+	color: var(--text-dim);
+	font-size: 14px;
 }
 
 .share-user-list {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 16px 0;
-    max-height: 300px;
-    overflow-y: auto;
+	list-style: none;
+	padding: 0;
+	margin: 0 0 16px 0;
+	max-height: 300px;
+	overflow-y: auto;
 }
 
 .share-user-list li {
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    background: var(--bg-light);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: all 0.2s;
+	padding: 12px 16px;
+	margin-bottom: 8px;
+	background: var(--bg-light);
+	border-radius: var(--radius-md);
+	cursor: pointer;
+	transition: all 0.2s;
 }
 
 .share-user-list li:hover {
-    background: var(--primary);
-    transform: translateX(4px);
+	background: var(--primary);
+	transform: translateX(4px);
 }
 
 .share-user-list li.no-users {
-    cursor: default;
-    text-align: center;
-    color: var(--text-dim);
+	cursor: default;
+	text-align: center;
+	color: var(--text-dim);
 }
 
 .share-user-list li.no-users:hover {
-    background: var(--bg-light);
-    transform: none;
+	background: var(--bg-light);
+	transform: none;
 }
 
 .share-dialog-content .cancel-btn {
-    width: 100%;
-    padding: 12px;
-    background: var(--bg-light);
-    border: none;
-    border-radius: var(--radius-btn);
-    color: var(--text-main);
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
+	width: 100%;
+	padding: 12px;
+	background: var(--bg-light);
+	border: none;
+	border-radius: var(--radius-btn);
+	color: var(--text-main);
+	font-size: 14px;
+	cursor: pointer;
+	transition: all 0.2s;
 }
 
 .share-dialog-content .cancel-btn:hover {
-    background: var(--bg-dark);
+	background: var(--bg-dark);
 }
 
 /* 拖拽文件时的视觉反馈 */
@@ -1542,10 +1612,13 @@ h2::before {
 }
 
 @keyframes drag-pulse {
-	0%, 100% {
+
+	0%,
+	100% {
 		background: rgba(189, 147, 249, 0.15);
 		border-color: rgba(189, 147, 249, 0.6);
 	}
+
 	50% {
 		background: rgba(189, 147, 249, 0.25);
 		border-color: rgba(189, 147, 249, 0.8);
