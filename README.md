@@ -82,8 +82,7 @@ cargo build --release --bin lanchat-web --features web --no-default-features
 ## 功能状态
 
 ### ✅ 已完成
-- [x] 项目架构搭建
-- [x] 数据库初始化
+
 - [x] 自动生成随机用户名
 - [x] 用户改名功能（桌面端 + Web 端）
 - [x] 局域网设备发现（UDP 广播）
@@ -92,21 +91,23 @@ cargo build --release --bin lanchat-web --features web --no-default-features
 - [x] 桌面端和 Web 端共享数据库
 - [x] 设置页面
 - [x] 消息历史记录查询
+- [x] 主题切换功能
 - [x] Android 端适配
 - [x] 文本消息传输
 - [x] 文件传输功能
 - [x] Windows 端适配
 - [x] 单实例锁定功能
 - [x] 文件流式传输
+- [x] 根据系统内存动态调整文件分块大小
 - [x] 支持广播和组播
 - [x] Android 热点随机网段暴力覆盖
-- [x] web端文件消息点击直接下载
+- [x] Web 端文件消息点击直接下载
 - [x] 桌面端文件消息点击打开所在路径
+- [x] Android 端接收其他应用分享的文件并发送
+- [x] Android 端文件消息点击分享到其他应用
 
 ### 🚧 进行中
-- [ ] 桌面端、web 端支持粘贴图片或文件
-- [ ] Android 端作为文件打开方式，并选择用户发送文件
-- [ ] Android 端点击文件消息选择应用打开
+- [ ] 桌面端、Web 端支持粘贴图片或文件
 - [ ] 删除历史聊天记录
 - [ ] 标注未读消息
 - [ ] 更换默认图标
