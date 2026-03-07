@@ -350,26 +350,31 @@ function calculateOptimalChunkSize(fileSize) {
 	return chunkSize;
 }
 
-async function apiSendFile(peerId, peerAddr, file) {
+async function apiSendFile(peerId, peerAddr, file, filePath) {
 	const tauri = getTauri();
 
 	if (tauri) {
-		// 桌面端/移动端 - 使用 Tauri 对话框选择文件
+		// 桌面端/移动端 - 使用 Tauri 对话框选择文件或使用提供的路径
 		try {
 			console.log("[JS-API] Tauri 环境发送文件");
 
-			// 使用 Tauri 的文件对话框
-			const selected = await tauri.dialog.open({
-				multiple: false,
-				title: '选择要发送的文件'
-			});
+			let selectedPath = filePath;
 
-			if (!selected) {
-				throw new Error("未选择文件");
+			// 如果没有提供文件路径，使用对话框选择
+			if (!selectedPath) {
+				const selected = await tauri.dialog.open({
+					multiple: false,
+					title: '选择要发送的文件'
+				});
+
+				if (!selected) {
+					throw new Error("未选择文件");
+				}
+
+				selectedPath = Array.isArray(selected) ? selected[0] : selected;
 			}
 
-			const filePath = Array.isArray(selected) ? selected[0] : selected;
-			console.log("[JS-API] 选择的文件:", filePath);
+			console.log("[JS-API] 文件路径:", selectedPath);
 
 			// 监听后端传来的进度事件
 			let unlistenProgress;
@@ -389,7 +394,7 @@ async function apiSendFile(peerId, peerAddr, file) {
 				const result = await tauri.core.invoke('send_file', {
 					peerId,
 					peerAddr,
-					filePath
+					filePath: selectedPath
 				});
 				console.log("[JS-API] 文件发送成功:", result);
 

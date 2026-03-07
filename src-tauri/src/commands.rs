@@ -372,8 +372,21 @@ pub async fn send_file(
         file_path, peer_addr, peer_id
     );
 
+    // 处理 file:// URI 格式
+    let actual_path = if file_path.starts_with("file://") {
+        // 移除 file:// 前缀并解码 URL 编码
+        let path_without_prefix = &file_path[7..];
+        urlencoding::decode(path_without_prefix)
+            .map_err(|e| format!("解码 URI 失败: {}", e))?
+            .to_string()
+    } else {
+        file_path.clone()
+    };
+
+    println!("[Command] 实际文件路径: {}", actual_path);
+
     // 检测是否是 Android content URI
-    if file_path.starts_with("content://") {
+    if actual_path.starts_with("content://") {
         #[cfg(target_os = "android")]
         {
             println!("[Command] 检测到 Android content URI，使用 FD 方式");
@@ -382,12 +395,12 @@ pub async fn send_file(
             use crate::android_fd::AndroidFile;
             
             // 从 content URI 获取文件描述符
-            let android_file = AndroidFile::from_content_uri(&file_path)?;
+            let android_file = AndroidFile::from_content_uri(&actual_path)?;
             let std_file = android_file.into_file();
             let file = tokio::fs::File::from_std(std_file);
             
             // 从 URI 中提取文件名
-            let file_name = file_path
+            let file_name = actual_path
                 .split('/')
                 .last()
                 .and_then(|s| urlencoding::decode(s).ok())
@@ -402,7 +415,7 @@ pub async fn send_file(
                 .unwrap_or_else(|| format!("file_{}.dat", chrono::Utc::now().timestamp()));
             
             // 获取文件大小
-            let file_size = match tokio::fs::metadata(&file_path).await {
+            let file_size = match tokio::fs::metadata(&actual_path).await {
                 Ok(metadata) => metadata.len() as usize,
                 Err(_) => {
                     // 如果无法通过 metadata 获取，尝试通过 stat 系统调用
@@ -423,7 +436,7 @@ pub async fn send_file(
                 peer_addr,
                 file_name,
                 file_size,
-                file_path,
+                actual_path,
                 file,
             )
             .await;
@@ -436,20 +449,20 @@ pub async fn send_file(
     }
 
     // 普通文件路径处理
-    let file_name = std::path::Path::new(&file_path)
+    let file_name = std::path::Path::new(&actual_path)
         .file_name()
         .and_then(|n| n.to_str())
         .ok_or("无效的文件名")?
         .to_string();
 
     let file_metadata =
-        std::fs::metadata(&file_path).map_err(|e| format!("读取文件信息失败: {}", e))?;
+        std::fs::metadata(&actual_path).map_err(|e| format!("读取文件信息失败: {}", e))?;
     let file_size = file_metadata.len() as usize;
 
     println!("[Command] 文件: {}, 大小: {} 字节", file_name, file_size);
 
     // 打开文件
-    let file = tokio::fs::File::open(&file_path)
+    let file = tokio::fs::File::open(&actual_path)
         .await
         .map_err(|e| format!("打开文件失败: {}", e))?;
 
@@ -463,7 +476,7 @@ pub async fn send_file(
         peer_addr,
         file_name,
         file_size,
-        file_path,
+        actual_path,
         file,
     )
     .await
@@ -898,6 +911,40 @@ pub async fn share_file_to_other_app(
 ) -> Result<(), String> {
     let _ = filePath;
     Err("此功能仅在 Android 上可用".to_string())
+}
+
+// 读取剪贴板中的文件路径（桌面端）
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn read_clipboard_files() -> Result<Vec<String>, String> {
+    println!("[Command] 读取剪贴板文件");
+    
+    #[cfg(not(target_os = "android"))]
+    {
+        use clipboard_rs::{Clipboard, ClipboardContext};
+        
+        let ctx = ClipboardContext::new()
+            .map_err(|e| format!("创建剪贴板上下文失败: {}", e))?;
+        
+        // 检查剪贴板中是否有文件
+        let files = ctx.get_files()
+            .map_err(|e| format!("读取剪贴板文件失败: {}", e))?;
+        
+        println!("[Command] 剪贴板中的文件: {:?}", files);
+        Ok(files)
+    }
+    
+    #[cfg(target_os = "android")]
+    {
+        Err("Android 不支持此功能".to_string())
+    }
+}
+
+// Web 端的空实现
+#[cfg(not(feature = "desktop"))]
+#[tauri::command]
+pub async fn read_clipboard_files() -> Result<Vec<String>, String> {
+    Err("此功能仅在桌面端可用".to_string())
 }
 
 

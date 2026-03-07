@@ -88,3 +88,8 @@ commands.allow = ["save_file_message"]
 identifier = "allow-open-file-location"
 description = "Allows opening file location in system file explorer"
 commands.allow = ["open_file_location"]
+
+[[permission]]
+identifier = "allow-read-clipboard-files"
+description = "Allows reading file paths from system clipboard"
+commands.allow = ["read_clipboard_files"]

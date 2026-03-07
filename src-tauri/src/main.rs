@@ -48,7 +48,8 @@ fn main() {
             lanchat::commands::get_android_shared_files,
             lanchat::commands::clear_android_shared_files,
             lanchat::commands::send_file_from_fd,
-            lanchat::commands::share_file_to_other_app
+            lanchat::commands::share_file_to_other_app,
+            lanchat::commands::read_clipboard_files
         ])
         // --------------------------
         .setup(|app| {

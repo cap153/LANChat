@@ -181,6 +181,7 @@ function initChat() {
 	const chatInput = document.getElementById('chat-input');
 	const attachFileBtn = document.getElementById('attach-file-btn');
 	const fileInput = document.getElementById('file-input');
+	const chatContainer = document.getElementById('chat-container');
 
 	// 关闭聊天窗口
 	closeChatBtn.addEventListener('click', () => {
@@ -230,6 +231,12 @@ function initChat() {
 			fileInput.value = ''; // 清空选择
 		}
 	});
+
+	// 拖拽文件功能
+	initDragAndDrop(chatContainer);
+
+	// 粘贴文件功能
+	initPasteFile();
 }
 
 // --- 赛博加固版 JS ---
@@ -528,6 +535,78 @@ function onReceiveMessage(message) {
 }
 
 
+// 通过文件路径发送文件（桌面端零拷贝，直接从硬盘读取）
+async function sendFileByPath(filePath) {
+	if (!window.currentChatPeer) return;
+
+	const tauri = window.__TAURI__;
+	
+	if (!tauri) {
+		console.error('[UI] sendFileByPath 只能在桌面端使用');
+		return;
+	}
+
+	console.log('[UI] 通过路径发送文件（零拷贝）:', filePath);
+
+	try {
+		// 处理 file:// URI 格式
+		let actualPath = filePath;
+		if (filePath.startsWith('file://')) {
+			// 移除 file:// 前缀并解码 URL 编码
+			actualPath = decodeURIComponent(filePath.substring(7));
+			console.log('[UI] 转换 URI 为路径:', actualPath);
+		}
+
+		// 获取文件名
+		const fileName = actualPath.split(/[\\/]/).pop();
+		
+		// 获取文件大小
+		let fileSize = 0;
+		try {
+			const metadata = await tauri.fs.stat(actualPath);
+			fileSize = metadata.size;
+		} catch (e) {
+			console.warn('[UI] 无法获取文件大小:', e);
+		}
+
+		// 显示上传中的临时消息
+		const tempFileId = 'temp_' + Date.now();
+		addMessageToChat({
+			msg_type: 'file',
+			from_id: 'me',
+			content: fileName,
+			file_name: fileName,
+			file_size: fileSize,
+			file_id: tempFileId,
+			file_status: 'uploading',
+			timestamp: Date.now() / 1000
+		}, true);
+
+		// 直接调用 send_file 命令，传递文件路径
+		// Rust 会直接从硬盘读取文件，零拷贝
+		const result = await apiSendFile(
+			window.currentChatPeer.id,
+			window.currentChatPeer.addr,
+			null,
+			actualPath
+		);
+
+		// 上传完成，刷新聊天历史
+		if (window.currentChatPeer) {
+			await loadChatHistory(window.currentChatPeer.id);
+		}
+
+		console.log('[UI] 文件发送成功（零拷贝）');
+	} catch (e) {
+		console.error('[UI] 文件发送失败:', e);
+		alert('文件发送失败: ' + e.message);
+		// 刷新聊天历史以移除失败的消息
+		if (window.currentChatPeer) {
+			await loadChatHistory(window.currentChatPeer.id);
+		}
+	}
+}
+
 // 发送文件
 async function sendFile(file) {
 	if (!window.currentChatPeer) return;
@@ -535,41 +614,106 @@ async function sendFile(file) {
 	const tauri = window.__TAURI__;
 
 	if (tauri) {
-		// 桌面端 - 不需要 file 参数，会自己弹出对话框
+		// 桌面端
 		console.log('[UI] 桌面端发送文件');
 
-		try {
-			// 先显示上传中的临时消息
-			const tempFileId = 'temp_' + Date.now();
-			addMessageToChat({
-				msg_type: 'file',
-				from_id: 'me',
-				content: '准备发送...',
-				file_name: '准备发送...',
-				file_size: 0,
-				file_id: tempFileId,
-				file_status: 'uploading',
-				timestamp: Date.now() / 1000
-			}, true);
+		// 如果传入了 file 参数（拖拽或粘贴），需要特殊处理
+		if (file) {
+			console.log('[UI] 处理拖拽/粘贴的文件:', file.name, file.size);
+			
+			// 桌面端拖拽/粘贴时，我们需要先将文件保存到临时目录
+			// 然后再调用 send_file 命令
+			try {
+				// 显示上传中的临时消息
+				const tempFileId = 'temp_' + Date.now();
+				addMessageToChat({
+					msg_type: 'file',
+					from_id: 'me',
+					content: file.name,
+					file_name: file.name,
+					file_size: file.size,
+					file_id: tempFileId,
+					file_status: 'uploading',
+					timestamp: Date.now() / 1000
+				}, true);
 
-			const result = await apiSendFile(
-				window.currentChatPeer.id,
-				window.currentChatPeer.addr,
-				null  // 桌面端不需要
-			);
+				// 读取文件内容
+				const arrayBuffer = await file.arrayBuffer();
+				const uint8Array = new Uint8Array(arrayBuffer);
 
-			// 上传完成，刷新聊天历史以显示正确的文件信息
-			if (window.currentChatPeer) {
-				await loadChatHistory(window.currentChatPeer.id);
+				// 获取临时目录路径
+				const tempDir = await tauri.path.tempDir();
+				const tempFilePath = await tauri.path.join(tempDir, file.name);
+
+				// 写入临时文件
+				await tauri.fs.writeFile(tempFilePath, uint8Array);
+				console.log('[UI] 文件已保存到临时目录:', tempFilePath);
+
+				// 调用 send_file 命令
+				const result = await apiSendFile(
+					window.currentChatPeer.id,
+					window.currentChatPeer.addr,
+					null,
+					tempFilePath  // 传递临时文件路径
+				);
+
+				// 上传完成，刷新聊天历史
+				if (window.currentChatPeer) {
+					await loadChatHistory(window.currentChatPeer.id);
+				}
+
+				// 删除临时文件
+				try {
+					await tauri.fs.remove(tempFilePath);
+					console.log('[UI] 临时文件已删除');
+				} catch (e) {
+					console.warn('[UI] 删除临时文件失败:', e);
+				}
+
+				console.log('[UI] 文件发送成功');
+			} catch (e) {
+				console.error('[UI] 文件发送失败:', e);
+				alert('文件发送失败: ' + e.message);
+				// 刷新聊天历史以移除失败的消息
+				if (window.currentChatPeer) {
+					await loadChatHistory(window.currentChatPeer.id);
+				}
 			}
+		} else {
+			// 没有传入 file 参数，使用文件对话框选择
+			try {
+				// 先显示上传中的临时消息
+				const tempFileId = 'temp_' + Date.now();
+				addMessageToChat({
+					msg_type: 'file',
+					from_id: 'me',
+					content: '准备发送...',
+					file_name: '准备发送...',
+					file_size: 0,
+					file_id: tempFileId,
+					file_status: 'uploading',
+					timestamp: Date.now() / 1000
+				}, true);
 
-			console.log('[UI] 文件发送成功');
-		} catch (e) {
-			console.error('[UI] 文件发送失败:', e);
-			alert('文件发送失败: ' + e.message);
-			// 刷新聊天历史以移除失败的消息
-			if (window.currentChatPeer) {
-				await loadChatHistory(window.currentChatPeer.id);
+				const result = await apiSendFile(
+					window.currentChatPeer.id,
+					window.currentChatPeer.addr,
+					null  // 桌面端不需要
+				);
+
+				// 上传完成，刷新聊天历史以显示正确的文件信息
+				if (window.currentChatPeer) {
+					await loadChatHistory(window.currentChatPeer.id);
+				}
+
+				console.log('[UI] 文件发送成功');
+			} catch (e) {
+				console.error('[UI] 文件发送失败:', e);
+				alert('文件发送失败: ' + e.message);
+				// 刷新聊天历史以移除失败的消息
+				if (window.currentChatPeer) {
+					await loadChatHistory(window.currentChatPeer.id);
+				}
 			}
 		}
 	} else {
@@ -1087,4 +1231,185 @@ async function loadSavedTheme() {
 	} catch (e) {
 		console.warn('[UI] 加载保存的主题失败:', e);
 	}
+}
+
+// 初始化拖拽文件功能
+function initDragAndDrop(chatContainer) {
+	console.log('[UI] 初始化拖拽文件功能');
+
+	const tauri = window.__TAURI__;
+
+	if (tauri) {
+		// 桌面端：使用 Tauri 的原生拖拽事件（可以获取文件路径）
+		console.log('[UI] 使用 Tauri 原生拖拽事件');
+		
+		// 监听 Tauri 的文件拖放事件
+		tauri.event.listen('tauri://drag-drop', async (event) => {
+			console.log('[UI] Tauri 拖放事件:', event);
+			
+			if (!window.currentChatPeer) {
+				console.log('[UI] 没有打开聊天窗口，忽略拖放');
+				return;
+			}
+
+			const paths = event.payload.paths;
+			if (paths && paths.length > 0) {
+				console.log('[UI] 拖放的文件路径:', paths);
+				
+				// 依次发送所有文件（使用文件路径，零拷贝）
+				for (const filePath of paths) {
+					console.log('[UI] 发送文件:', filePath);
+					await sendFileByPath(filePath);
+				}
+			}
+		});
+
+		// 监听拖拽悬停事件（显示视觉反馈）
+		tauri.event.listen('tauri://drag-enter', () => {
+			if (window.currentChatPeer) {
+				chatContainer.classList.add('drag-over');
+			}
+		});
+
+		tauri.event.listen('tauri://drag-leave', () => {
+			chatContainer.classList.remove('drag-over');
+		});
+
+		tauri.event.listen('tauri://drag-drop', () => {
+			chatContainer.classList.remove('drag-over');
+		});
+
+	} else {
+		// Web 端：使用传统的 HTML5 拖拽 API（需要读取文件内容）
+		console.log('[UI] 使用 HTML5 拖拽 API');
+
+		// 防止默认的拖拽行为（打开文件）
+		['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+			chatContainer.addEventListener(eventName, preventDefaults, false);
+			document.body.addEventListener(eventName, preventDefaults, false);
+		});
+
+		function preventDefaults(e) {
+			e.preventDefault();
+			e.stopPropagation();
+		}
+
+		// 拖拽进入时高亮
+		['dragenter', 'dragover'].forEach(eventName => {
+			chatContainer.addEventListener(eventName, () => {
+				if (window.currentChatPeer) {
+					chatContainer.classList.add('drag-over');
+				}
+			}, false);
+		});
+
+		// 拖拽离开时取消高亮
+		['dragleave', 'drop'].forEach(eventName => {
+			chatContainer.addEventListener(eventName, () => {
+				chatContainer.classList.remove('drag-over');
+			}, false);
+		});
+
+		// 处理文件拖放
+		chatContainer.addEventListener('drop', async (e) => {
+			if (!window.currentChatPeer) {
+				console.log('[UI] 没有打开聊天窗口，忽略拖放');
+				return;
+			}
+
+			const files = e.dataTransfer.files;
+			
+			if (files && files.length > 0) {
+				console.log('[UI] 拖放了', files.length, '个文件');
+				
+				// 依次发送所有文件
+				for (let i = 0; i < files.length; i++) {
+					const file = files[i];
+					console.log('[UI] 拖放的文件:', file.name, file.size);
+					await sendFile(file);
+				}
+			} else {
+				console.log('[UI] 没有检测到文件');
+			}
+		}, false);
+	}
+}
+
+// 初始化粘贴文件功能
+function initPasteFile() {
+	console.log('[UI] 初始化粘贴文件功能');
+
+	const tauri = window.__TAURI__;
+
+	// 监听全局粘贴事件
+	document.addEventListener('paste', async (e) => {
+		// 只在聊天窗口打开时处理
+		if (!window.currentChatPeer) {
+			console.log('[UI] 没有打开聊天窗口，忽略粘贴');
+			return;
+		}
+
+		// 桌面端：优先尝试使用 clipboard-rs 读取文件路径（零拷贝）
+		if (tauri) {
+			try {
+				console.log('[UI] 尝试从剪贴板读取文件路径');
+				const filePaths = await tauri.core.invoke('read_clipboard_files');
+				
+				if (filePaths && filePaths.length > 0) {
+					console.log('[UI] 剪贴板中的文件路径:', filePaths);
+					e.preventDefault(); // 阻止默认粘贴行为
+					
+					// 使用零拷贝方式发送文件
+					for (const filePath of filePaths) {
+						await sendFileByPath(filePath);
+					}
+					return;
+				} else {
+					console.log('[UI] 剪贴板中没有文件');
+				}
+			} catch (err) {
+				console.log('[UI] 读取剪贴板文件路径失败，尝试使用传统方式:', err);
+				// 继续使用传统方式处理
+			}
+		}
+
+		// 传统方式：从 ClipboardEvent 读取文件（需要读取内容）
+		const clipboardData = e.clipboardData || window.clipboardData;
+		if (!clipboardData) {
+			console.log('[UI] 无法访问剪贴板');
+			return;
+		}
+
+		// 检查是否有文件
+		const items = clipboardData.items;
+		if (!items || items.length === 0) {
+			console.log('[UI] 剪贴板中没有内容');
+			return;
+		}
+
+		let hasFile = false;
+
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i];
+			console.log('[UI] 剪贴板项目类型:', item.type, item.kind);
+
+			if (item.kind === 'file') {
+				hasFile = true;
+				e.preventDefault(); // 阻止默认粘贴行为
+
+				const file = item.getAsFile();
+				if (file) {
+					console.log('[UI] 粘贴的文件:', file.name, file.size, file.type);
+					await sendFile(file);
+				}
+			}
+		}
+
+		if (hasFile) {
+			console.log('[UI] 已处理粘贴的文件');
+		}
+	});
+
+	// 添加快捷键提示
+	console.log('[UI] Ctrl+V 粘贴文件功能已启用（支持零拷贝）');
 }

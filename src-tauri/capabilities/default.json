@@ -10,6 +10,9 @@
     "core:event:default",
     "core:path:default",
     "fs:default",
+    "fs:allow-write-file",
+    "fs:allow-remove",
+    "fs:allow-stat",
     "dialog:default",
     "sql:default",
     "log:default",
@@ -32,11 +35,19 @@
     "allow-request-storage-permission",
     "allow-save-file-message",
     "allow-open-file-location",
+    "allow-read-clipboard-files",
     {
       "identifier": "opener:allow-reveal-item-in-dir",
       "allow": [
         { "path": "[a-zA-Z]:**" },
         { "path": "/**" }
+      ]
+    },
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$TEMP/**" },
+        { "path": "**" }
       ]
     }
   ]
