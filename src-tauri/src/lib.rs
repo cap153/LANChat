@@ -29,6 +29,7 @@ pub fn run() {
             commands::get_peers,
             commands::send_message,
             commands::get_chat_history,
+            commands::get_chat_history_with_offset,
             commands::send_file,
             commands::get_settings,
             commands::update_settings,

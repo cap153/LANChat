@@ -337,8 +337,7 @@ async function sendMessage() {
 		}, true);
 
 		// 发送消息后滚动到底部
-		const chatMessages = document.getElementById('chat-messages');
-		chatMessages.scrollTop = chatMessages.scrollHeight;
+		await scrollToBottom();
 
 		console.log('[UI] 发送消息:', content);
 	} catch (e) {
@@ -350,6 +349,343 @@ async function sendMessage() {
 // 添加消息到聊天窗口
 function addMessageToChat(message, isSent) {
     const chatMessages = document.getElementById('chat-messages');
+    const messageDiv = createMessageElement(message, isSent);
+    chatMessages.appendChild(messageDiv);
+}
+
+// 创建文件图标元素
+function createFileIcon(message) {
+    const fileInfo = document.createElement('div');
+    fileInfo.className = 'file-info-wrapper';
+
+    // 1. 图标
+    const fileIcon = document.createElement('span');
+    fileIcon.className = 'file-icon';
+    fileIcon.textContent = '📄';
+
+    // 2. 文件信息
+    const fileInfoText = document.createElement('div');
+    fileInfoText.className = 'file-info';
+
+    // 文件名
+    const fileName = document.createElement('div');
+    fileName.className = 'file-name';
+    fileName.textContent = message.file_name || message.content;
+
+    // 文件大小
+    const fileSize = document.createElement('div');
+    fileSize.className = 'file-size';
+    fileSize.textContent = message.file_size ? formatFileSize(message.file_size) : '未知大小';
+
+    fileInfoText.appendChild(fileName);
+    fileInfoText.appendChild(fileSize);
+    
+    fileInfo.appendChild(fileIcon);
+    fileInfo.appendChild(fileInfoText);
+
+    return fileInfo;
+}
+
+// 检查是否是图片文件
+function isImageFile(fileName) {
+    if (!fileName) return false;
+    
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'];
+    const lowerFileName = fileName.toLowerCase();
+    
+    return imageExtensions.some(ext => lowerFileName.endsWith(ext));
+}
+
+// 等待聊天窗口中的所有图片加载完成
+function waitForImagesToLoad(container) {
+	return new Promise((resolve) => {
+		const images = container.querySelectorAll('img');
+		
+		if (images.length === 0) {
+			resolve();
+			return;
+		}
+		
+		let loadedCount = 0;
+		const totalImages = images.length;
+		
+		const checkAllLoaded = () => {
+			loadedCount++;
+			if (loadedCount === totalImages) {
+				resolve();
+			}
+		};
+		
+		images.forEach(img => {
+			if (img.complete) {
+				checkAllLoaded();
+			} else {
+				img.addEventListener('load', checkAllLoaded);
+				img.addEventListener('error', checkAllLoaded); // 即使加载失败也要继续
+			}
+		});
+		
+		// 设置超时，避免永久等待
+		setTimeout(() => {
+			resolve();
+		}, 2000);
+	});
+}
+
+// 滚动到聊天窗口底部（等待图片加载）
+async function scrollToBottom() {
+	const chatMessages = document.getElementById('chat-messages');
+	if (!chatMessages) return;
+	
+	// 等待图片加载完成
+	await waitForImagesToLoad(chatMessages);
+	
+	// 滚动到底部
+	chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// 加载聊天历史（支持懒加载）
+async function loadChatHistory(peerId, preserveScroll = false) {
+	try {
+		// 禁用轮询，避免干扰加载过程
+		const wasPollingEnabled = window.messagePollingEnabled;
+		window.messagePollingEnabled = false;
+		
+		// 首次加载，获取最新的10条消息
+		const messages = await apiGetChatHistory(peerId, 10, 0);
+
+		const chatMessages = document.getElementById('chat-messages');
+
+		// 保存当前滚动位置
+		const oldScrollTop = chatMessages.scrollTop;
+		const oldScrollHeight = chatMessages.scrollHeight;
+		const wasAtBottom = oldScrollHeight - oldScrollTop - chatMessages.clientHeight < 100;
+
+		chatMessages.innerHTML = '';
+
+		// 存储当前对话的消息总数和已加载数量
+		window.currentChatMessages = {
+			peerId: peerId,
+			loadedCount: messages.length,
+			totalCount: messages.length,
+			isLoading: false,
+			hasMore: true // 默认假设有更多，尝试加载时才知道
+		};
+
+		for (const msg of messages) {
+			addMessageToChat(msg, msg.from_id === 'me');
+			// 更新最后消息时间戳
+			if (msg.timestamp > (window.lastMessageTimestamp || 0)) {
+				window.lastMessageTimestamp = msg.timestamp;
+			}
+		}
+
+		// 等待图片加载完成
+		await waitForImagesToLoad(chatMessages);
+
+		// 首次加载时，如果没有滚动条，继续加载更多消息直到出现滚动条或没有更多消息
+		if (!preserveScroll) {
+			let hasScrollbar = chatMessages.scrollHeight > chatMessages.clientHeight;
+			
+			while (!hasScrollbar && window.currentChatMessages.hasMore) {
+				const offset = window.currentChatMessages.loadedCount;
+				const moreMessages = await apiGetChatHistory(peerId, 10, offset);
+				
+				if (moreMessages.length === 0) {
+					window.currentChatMessages.hasMore = false;
+					break;
+				}
+				
+				// 在顶部插入消息
+				for (let i = moreMessages.length - 1; i >= 0; i--) {
+					const msg = moreMessages[i];
+					const messageDiv = createMessageElement(msg, msg.from_id === 'me');
+					chatMessages.insertBefore(messageDiv, chatMessages.firstChild);
+				}
+				
+				window.currentChatMessages.loadedCount += moreMessages.length;
+				
+				if (moreMessages.length < 10) {
+					window.currentChatMessages.hasMore = false;
+					break;
+				}
+				
+				// 等待图片加载
+				await waitForImagesToLoad(chatMessages);
+				
+				// 检查是否出现滚动条
+				hasScrollbar = chatMessages.scrollHeight > chatMessages.clientHeight;
+			}
+			
+			// 自动加载完成后，滚动到底部
+			await scrollToBottom();
+		} else {
+			// 恢复滚动位置
+			if (!wasAtBottom) {
+				// 如果用户不在底部，尝试保持相对位置
+				const newScrollHeight = chatMessages.scrollHeight;
+				const scrollDiff = newScrollHeight - oldScrollHeight;
+				chatMessages.scrollTop = oldScrollTop + scrollDiff;
+			} else {
+				// 用户在底部时，滚动到底部
+				await scrollToBottom();
+			}
+		}
+
+		// 只在首次加载时初始化滚动监听器
+		if (!preserveScroll && !window.scrollListenerAttached) {
+			initScrollListener();
+		}
+		
+		// 恢复轮询
+		window.messagePollingEnabled = wasPollingEnabled;
+	} catch (e) {
+		console.error('[UI] 加载历史消息失败:', e);
+		// 出错时也要恢复轮询
+		window.messagePollingEnabled = true;
+	}
+}
+
+// 初始化滚动监听器（懒加载）
+function initScrollListener() {
+	const chatMessages = document.getElementById('chat-messages');
+	
+	// 移除旧的监听器（如果存在）
+	if (window.scrollListenerAttached) {
+		chatMessages.removeEventListener('scroll', window.handleChatScroll);
+	}
+	
+	// 定义滚动处理函数
+	window.handleChatScroll = async function() {
+		if (!window.currentChatMessages) {
+			return;
+		}
+		
+		if (window.currentChatMessages.isLoading) {
+			return;
+		}
+		
+		const scrollTop = chatMessages.scrollTop;
+		const scrollHeight = chatMessages.scrollHeight;
+		const clientHeight = chatMessages.clientHeight;
+		
+		// 检查是否滚动到底部（距离底部小于100px）
+		const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+		
+		// 如果滚动到底部，触发一次刷新（检查新消息）
+if (isAtBottom && window.lastScrollWasNotAtBottom) {
+		console.log('[UI] 滚动到底部，检查新消息');
+		window.currentChatMessages.isLoading = true;
+		try {
+				// 同样只取最新的小批量，靠时间戳过滤
+				const latestMessages = await apiGetChatHistory(window.currentChatMessages.peerId, 20, 0);
+				const newMessages = latestMessages.filter(msg => msg.timestamp > (window.lastMessageTimestamp || 0));
+
+				if (newMessages.length > 0) {
+						for (const msg of newMessages) {
+								addMessageToChat(msg, msg.from_id === 'me');
+								if (msg.timestamp > (window.lastMessageTimestamp || 0)) {
+										window.lastMessageTimestamp = msg.timestamp;
+								}
+						}
+						window.currentChatMessages.loadedCount += newMessages.length;
+						window.currentChatMessages.totalCount += newMessages.length;
+						await scrollToBottom();
+				}
+		} catch (e) {
+				console.error('[UI] 检查新消息失败:', e);
+		} finally {
+				window.currentChatMessages.isLoading = false;
+		}
+}
+		
+		// 记录当前是否在底部
+		window.lastScrollWasNotAtBottom = !isAtBottom;
+		
+		if (!window.currentChatMessages.hasMore) {
+			return;
+		}
+		
+		// 检查是否滚动到顶部（距离顶部小于100px）
+		// 同时确保不是刚加载完（scrollHeight > clientHeight 说明有滚动条）
+		const hasScrollbar = scrollHeight > clientHeight;
+		if (hasScrollbar && scrollTop < 100) {
+			console.log('[UI] 触发懒加载，加载更多历史消息');
+			
+			window.currentChatMessages.isLoading = true;
+			
+			// 暂时禁用消息轮询，防止干扰
+			const wasPollingEnabled = window.messagePollingEnabled;
+			window.messagePollingEnabled = false;
+			
+			try {
+				// 加载更多消息
+				const offset = window.currentChatMessages.loadedCount;
+				
+				const moreMessages = await apiGetChatHistory(
+					window.currentChatMessages.peerId, 
+					10, 
+					offset
+				);
+				
+				if (moreMessages.length === 0) {
+					console.log('[UI] 没有更多历史消息了');
+					window.currentChatMessages.hasMore = false;
+					window.currentChatMessages.isLoading = false;
+					window.messagePollingEnabled = wasPollingEnabled;
+					return;
+				}
+				
+				// 保存当前滚动位置
+				const oldScrollTop = chatMessages.scrollTop;
+				const oldScrollHeight = chatMessages.scrollHeight;
+				
+				// 在顶部插入消息（倒序插入）
+				for (let i = moreMessages.length - 1; i >= 0; i--) {
+					const msg = moreMessages[i];
+					const messageDiv = createMessageElement(msg, msg.from_id === 'me');
+					chatMessages.insertBefore(messageDiv, chatMessages.firstChild);
+				}
+				
+				// 更新已加载数量
+				window.currentChatMessages.loadedCount += moreMessages.length;
+				
+				// 如果返回的消息少于10条，说明没有更多了
+				if (moreMessages.length < 10) {
+					window.currentChatMessages.hasMore = false;
+				}
+				
+				// 恢复滚动位置（保持在原来的消息位置）
+				// 使用 requestAnimationFrame 确保 DOM 更新完成后再设置滚动位置
+				requestAnimationFrame(() => {
+					const newScrollHeight = chatMessages.scrollHeight;
+					const addedHeight = newScrollHeight - oldScrollHeight;
+					const newScrollTop = oldScrollTop + addedHeight;
+					
+					chatMessages.scrollTop = newScrollTop;
+					
+					// 恢复消息轮询
+					setTimeout(() => {
+						window.messagePollingEnabled = wasPollingEnabled;
+					}, 100);
+				});
+				
+			} catch (e) {
+				console.error('[UI] 加载更多消息失败:', e);
+				window.messagePollingEnabled = wasPollingEnabled;
+			} finally {
+				window.currentChatMessages.isLoading = false;
+			}
+		}
+	};
+	
+	// 添加滚动监听器
+	chatMessages.addEventListener('scroll', window.handleChatScroll);
+	window.scrollListenerAttached = true;
+}
+
+// 创建消息元素（从 addMessageToChat 中提取）
+function createMessageElement(message, isSent) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
 
@@ -466,89 +802,8 @@ function addMessageToChat(message, isSent) {
 
     messageDiv.appendChild(contentDiv);
     messageDiv.appendChild(timeDiv);
-    chatMessages.appendChild(messageDiv);
-}
-
-// 创建文件图标元素
-function createFileIcon(message) {
-    const fileInfo = document.createElement('div');
-    fileInfo.className = 'file-info-wrapper';
-
-    // 1. 图标
-    const fileIcon = document.createElement('span');
-    fileIcon.className = 'file-icon';
-    fileIcon.textContent = '📄';
-
-    // 2. 文件信息
-    const fileInfoText = document.createElement('div');
-    fileInfoText.className = 'file-info';
-
-    // 文件名
-    const fileName = document.createElement('div');
-    fileName.className = 'file-name';
-    fileName.textContent = message.file_name || message.content;
-
-    // 文件大小
-    const fileSize = document.createElement('div');
-    fileSize.className = 'file-size';
-    fileSize.textContent = message.file_size ? formatFileSize(message.file_size) : '未知大小';
-
-    fileInfoText.appendChild(fileName);
-    fileInfoText.appendChild(fileSize);
     
-    fileInfo.appendChild(fileIcon);
-    fileInfo.appendChild(fileInfoText);
-
-    return fileInfo;
-}
-
-// 检查是否是图片文件
-function isImageFile(fileName) {
-    if (!fileName) return false;
-    
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'];
-    const lowerFileName = fileName.toLowerCase();
-    
-    return imageExtensions.some(ext => lowerFileName.endsWith(ext));
-}
-
-// 加载聊天历史
-async function loadChatHistory(peerId, preserveScroll = false) {
-	try {
-		const messages = await apiGetChatHistory(peerId);
-
-		const chatMessages = document.getElementById('chat-messages');
-
-		// 保存当前滚动位置
-		const oldScrollTop = chatMessages.scrollTop;
-		const oldScrollHeight = chatMessages.scrollHeight;
-		const wasAtBottom = oldScrollHeight - oldScrollTop - chatMessages.clientHeight < 100;
-
-		chatMessages.innerHTML = '';
-
-		for (const msg of messages) {
-			addMessageToChat(msg, msg.from_id === 'me');
-			// 更新最后消息时间戳
-			if (msg.timestamp > (window.lastMessageTimestamp || 0)) {
-				window.lastMessageTimestamp = msg.timestamp;
-			}
-		}
-
-		// 恢复滚动位置
-		if (preserveScroll && !wasAtBottom) {
-			// 如果用户不在底部，尝试保持相对位置
-			const newScrollHeight = chatMessages.scrollHeight;
-			const scrollDiff = newScrollHeight - oldScrollHeight;
-			chatMessages.scrollTop = oldScrollTop + scrollDiff;
-		} else if (!preserveScroll || wasAtBottom) {
-			// 首次加载或用户在底部时，滚动到底部
-			chatMessages.scrollTop = chatMessages.scrollHeight;
-		}
-
-		console.log('[UI] 加载了', messages.length, '条历史消息');
-	} catch (e) {
-		console.error('[UI] 加载历史消息失败:', e);
-	}
+    return messageDiv;
 }
 
 // 接收到新消息
@@ -577,7 +832,10 @@ function onReceiveMessage(message) {
 
 			// 只有在底部时才滚动
 			if (wasAtBottom) {
-				chatMessages.scrollTop = chatMessages.scrollHeight;
+				// 使用 setTimeout 确保 DOM 更新后再滚动
+				setTimeout(async () => {
+					await scrollToBottom();
+				}, 50);
 			}
 		}
 	} else {
@@ -653,6 +911,9 @@ async function sendFileByPath(filePath) {
 			await loadChatHistory(window.currentChatPeer.id);
 		}
 
+		// 滚动到底部
+		await scrollToBottom();
+
 		console.log('[UI] 文件发送成功（零拷贝）');
 	} catch (e) {
 		console.error('[UI] 文件发送失败:', e);
@@ -719,6 +980,9 @@ async function sendFile(file) {
 					await loadChatHistory(window.currentChatPeer.id);
 				}
 
+				// 滚动到底部
+				await scrollToBottom();
+
 				// 删除临时文件
 				try {
 					await tauri.fs.remove(tempFilePath);
@@ -762,6 +1026,9 @@ async function sendFile(file) {
 				if (window.currentChatPeer) {
 					await loadChatHistory(window.currentChatPeer.id);
 				}
+
+				// 滚动到底部
+				await scrollToBottom();
 
 				console.log('[UI] 文件发送成功');
 			} catch (e) {
@@ -847,6 +1114,9 @@ async function sendFile(file) {
 			if (window.currentChatPeer) {
 				await loadChatHistory(window.currentChatPeer.id);
 			}
+
+			// 滚动到底部
+			await scrollToBottom();
 
 			console.log('[UI] ========== 文件发送完成 ==========');
 		} catch (e) {

@@ -22,7 +22,6 @@ async function renderPage() {
 
     // 使用我们封装好的 apiListen
     await apiListen('new-peer', (event) => {
-        console.log("[JS-App] 收到新邻居:", event.payload);
         addUserToList(event.payload.id, event.payload.name, event.payload.addr, false);
     });
 
@@ -49,7 +48,7 @@ async function renderPage() {
 
 // Web 端轮询用户列表
 async function startPeerPolling() {
-    const pollInterval = 3000; // 3秒轮询一次
+    const pollInterval = 1000;
     
     const updatePeerList = async () => {
         const peers = await apiGetPeers();
@@ -217,41 +216,58 @@ document.addEventListener('DOMContentLoaded', renderPage);
 
 // Web 端轮询新消息
 async function startMessagePolling() {
-    const pollInterval = 2000; // 2秒轮询一次
+    const pollInterval = 1000;
+    
+    // 初始化轮询开关
+    window.messagePollingEnabled = true;
     
     const checkNewMessages = async () => {
-        if (!window.currentChatPeer) return;
+        // 如果轮询被禁用，或者当前没有聊天对象，直接跳过
+        if (!window.messagePollingEnabled || !window.currentChatPeer) {
+            return;
+        }
         
         try {
-            const messages = await apiGetChatHistory(window.currentChatPeer.id);
-            
-            // 检查是否有新消息或状态变化
-            let hasChanges = false;
-            
-            // 检查消息数量是否变化
             const chatMessages = document.getElementById('chat-messages');
-            const currentMessageCount = chatMessages.querySelectorAll('.message').length;
+            const scrollTop = chatMessages.scrollTop;
+            const scrollHeight = chatMessages.scrollHeight;
+            const clientHeight = chatMessages.clientHeight;
+            const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
             
-            if (messages.length !== currentMessageCount) {
-                hasChanges = true;
-            } else {
-                // 检查是否有文件状态变化（downloading -> pending/accepted）
-                for (const msg of messages) {
-                    if (msg.msg_type === 'file' && msg.file_status !== 'downloading') {
-                        // 检查当前显示的消息是否还是 downloading 状态
-                        const fileMessages = chatMessages.querySelectorAll('.file-downloading');
-                        if (fileMessages.length > 0) {
-                            hasChanges = true;
-                            break;
-                        }
-                    }
-                }
+            // 只有在底部时才检查和追加消息，防止打断用户往上翻阅历史记录
+            if (!isAtBottom) {
+                return;
             }
             
-            // 如果有变化，刷新整个聊天历史
-            if (hasChanges) {
-                console.log('[JS-App] 检测到消息变化，刷新聊天历史');
-                await loadChatHistory(window.currentChatPeer.id, true); // 保持滚动位置
+            // 只获取最新的 20 条消息
+            const latestMessages = await apiGetChatHistory(window.currentChatPeer.id, 20, 0);
+            
+            if (!latestMessages || latestMessages.length === 0) return;
+
+            // 通过时间戳判断真正的“新消息”，而不是通过 DOM 节点数量对比
+            const newMessages = latestMessages.filter(msg => 
+                msg.timestamp > (window.lastMessageTimestamp || 0)
+            );
+            
+            // 如果确实有新消息才渲染
+            if (newMessages.length > 0) {
+                for (const msg of newMessages) {
+                    addMessageToChat(msg, msg.from_id === 'me');
+                    
+                    // 动态更新最后一条消息的时间戳
+                    if (msg.timestamp > (window.lastMessageTimestamp || 0)) {
+                        window.lastMessageTimestamp = msg.timestamp;
+                    }
+                }
+                
+                // 维护懒加载的总数量计数器
+                if (window.currentChatMessages) {
+                    window.currentChatMessages.loadedCount += newMessages.length;
+                    window.currentChatMessages.totalCount += newMessages.length;
+                }
+                
+                // 滚动到底部
+                await scrollToBottom();
             }
         } catch (e) {
             console.error('[JS-App] 轮询消息失败:', e);

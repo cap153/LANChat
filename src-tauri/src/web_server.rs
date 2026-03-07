@@ -1,7 +1,7 @@
 use axum::extract::ws::{Message, WebSocket};
 use axum::{
     body::Body,
-    extract::{Json, Multipart, Path, State, WebSocketUpgrade},
+    extract::{Json, Multipart, Path, Query, State, WebSocketUpgrade},
     http::{header, Response, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -281,8 +281,20 @@ async fn send_message_http(
 async fn get_chat_history_http(
     State(state): State<Arc<AppState>>,
     Path(peer_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> impl IntoResponse {
-    match crate::network::messaging::get_chat_history(&state.pool, &peer_id, 100).await {
+    // 从查询参数获取 limit 和 offset
+    let limit = params
+        .get("limit")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(10);
+    
+    let offset = params
+        .get("offset")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(0);
+    
+    match crate::network::messaging::get_chat_history_with_offset(&state.pool, &peer_id, limit, offset).await {
         Ok(messages) => Json(serde_json::json!({ "messages": messages })).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -291,6 +303,7 @@ async fn get_chat_history_http(
             .into_response(),
     }
 }
+
 
 // WebSocket 处理器
 async fn websocket_handler(
@@ -813,24 +826,69 @@ async fn download_file_http(
     State(state): State<Arc<AppState>>,
     Path(file_id): Path<String>,
 ) -> impl IntoResponse {
-    println!("[Web Server] 收到文件下载请求: {}", file_id);
+    println!("[Web Server] 下载文件请求: {}", file_id);
+    
+    // 首先尝试从数据库查询文件路径
+    // 通过 file_path 的文件名匹配
+    let file_path_result = sqlx::query_scalar::<_, String>(
+        "SELECT file_path FROM messages 
+         WHERE file_path IS NOT NULL 
+         AND (file_path LIKE ? OR content = ?)
+         ORDER BY timestamp DESC LIMIT 1"
+    )
+    .bind(format!("%/{}", file_id))  // 匹配路径末尾的文件名
+    .bind(&file_id)
+    .fetch_optional(&state.pool)
+    .await;
 
-    let download_dir = get_download_dir(&state.pool).await;
-    let file_path = download_dir.join(&file_id);
+    let file_path = match file_path_result {
+        Ok(Some(path)) => {
+            println!("[Web Server] 从数据库找到文件路径: {}", path);
+            std::path::PathBuf::from(path)
+        }
+        _ => {
+            println!("[Web Server] 数据库中未找到，尝试从下载目录查找");
+            // 没有找到记录，尝试从下载目录查找
+            let download_dir = get_download_dir(&state.pool).await;
+            download_dir.join(&file_id)
+        }
+    };
+
+    println!("[Web Server] 尝试读取文件: {}", file_path.display());
 
     match fs::read(&file_path).await {
-        Ok(data) => Response::builder()
-            .header(header::CONTENT_TYPE, "application/octet-stream")
-            .header(
-                header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"{}\"", file_id),
-            )
-            .body(Body::from(data))
-            .unwrap(),
-        Err(e) => Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Body::from(format!("文件不存在: {}", e)))
-            .unwrap(),
+        Ok(data) => {
+            // 根据文件扩展名设置 Content-Type
+            let content_type = if file_id.ends_with(".jpg") || file_id.ends_with(".jpeg") {
+                "image/jpeg"
+            } else if file_id.ends_with(".png") {
+                "image/png"
+            } else if file_id.ends_with(".gif") {
+                "image/gif"
+            } else if file_id.ends_with(".webp") {
+                "image/webp"
+            } else {
+                "application/octet-stream"
+            };
+
+            println!("[Web Server] 文件读取成功，大小: {} bytes", data.len());
+
+            Response::builder()
+                .header(header::CONTENT_TYPE, content_type)
+                .header(
+                    header::CONTENT_DISPOSITION,
+                    format!("inline; filename=\"{}\"", file_id),
+                )
+                .body(Body::from(data))
+                .unwrap()
+        }
+        Err(e) => {
+            eprintln!("[Web Server] 文件不存在: {} - {}", file_path.display(), e);
+            Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::from(format!("文件不存在: {} - {}", file_path.display(), e)))
+                .unwrap()
+        }
     }
 }
 

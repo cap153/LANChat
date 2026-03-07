@@ -25,6 +25,7 @@
     "allow-get-peers",
     "allow-send-message",
     "allow-get-chat-history",
+    "allow-get-chat-history-with-offset",
     "allow-send-file",
     "allow-get-settings",
     "allow-update-settings",

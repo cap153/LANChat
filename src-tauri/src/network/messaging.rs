@@ -260,11 +260,21 @@ async fn save_message_to_db(
     Ok(())
 }
 
-// 查询聊天历史
+// 查询聊天历史（支持分页）
 pub async fn get_chat_history(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     peer_id: &str,
     limit: i32,
+) -> Result<Vec<serde_json::Value>, String> {
+    get_chat_history_with_offset(pool, peer_id, limit, 0).await
+}
+
+// 查询聊天历史（带偏移量，用于懒加载）
+pub async fn get_chat_history_with_offset(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    peer_id: &str,
+    limit: i32,
+    offset: i32,
 ) -> Result<Vec<serde_json::Value>, String> {
     // 获取当前用户ID
     let my_id = crate::db::get_user_id(pool).await?;
@@ -273,14 +283,20 @@ pub async fn get_chat_history(
     // 1. 我发送给对方的消息 (sender_id = my_id AND receiver_id = peer_id)
     // 2. 对方发送给我的消息 (sender_id = peer_id AND (receiver_id = my_id OR receiver_id IS NULL))
     // 3. 兼容旧数据：sender_id = 'me' 的消息
+    // 使用子查询先排序再分页，确保获取最新的消息
     let messages = sqlx::query_as::<_, crate::models::Message>(
         "SELECT id, sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status 
-         FROM messages 
-         WHERE 
-            (sender_id = ? AND receiver_id = ?) OR 
-            (sender_id = ? AND (receiver_id = ? OR receiver_id IS NULL)) OR
-            (sender_id = 'me' AND receiver_id = ?)
-         ORDER BY timestamp ASC LIMIT ?",
+         FROM (
+            SELECT id, sender_id, receiver_id, content, msg_type, timestamp, file_path, file_status 
+            FROM messages 
+            WHERE 
+                (sender_id = ? AND receiver_id = ?) OR 
+                (sender_id = ? AND (receiver_id = ? OR receiver_id IS NULL)) OR
+                (sender_id = 'me' AND receiver_id = ?)
+            ORDER BY timestamp DESC 
+            LIMIT ? OFFSET ?
+         ) 
+         ORDER BY timestamp ASC",
     )
     .bind(&my_id) // 我发送的消息
     .bind(peer_id) // 发送给对方
@@ -288,6 +304,7 @@ pub async fn get_chat_history(
     .bind(&my_id) // 发送给我
     .bind(peer_id) // 兼容旧数据
     .bind(limit)
+    .bind(offset)
     .fetch_all(pool)
     .await
     .map_err(|e| format!("查询历史失败: {}", e))?;

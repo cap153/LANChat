@@ -27,18 +27,19 @@ impl PeerManager {
     }
 
     // 添加或更新用户
-    pub fn add_or_update(&self, id: String, name: String, addr: String) {
-        self.add_or_update_with_memory(id, name, addr, 0);
+    pub fn add_or_update(&self, id: String, name: String, addr: String) -> bool {
+        self.add_or_update_with_memory(id, name, addr, 0)
     }
 
     // 添加或更新用户（包含内存信息）
+    // 返回 true 表示是新用户或重新上线，false 表示只是更新
     pub fn add_or_update_with_memory(
         &self,
         id: String,
         name: String,
         addr: String,
         available_memory_mb: u64,
-    ) {
+    ) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -55,17 +56,15 @@ impl PeerManager {
             peer.is_offline = false;
             peer.available_memory_mb = available_memory_mb;
 
+            // 只在用户重新上线时打印日志
             if was_offline {
                 println!(
                     "[PeerManager] 用户重新上线: {} ({}) - 可用内存: {} MB",
                     peer.name, peer.id, available_memory_mb
                 );
-            } else {
-                println!(
-                    "[PeerManager] 更新用户: {} ({}) - 可用内存: {} MB",
-                    peer.name, peer.id, available_memory_mb
-                );
+                return true; // 重新上线，返回 true
             }
+            return false; // 只是更新，返回 false
         } else {
             // 新用户
             let peer = Peer {
@@ -81,6 +80,7 @@ impl PeerManager {
                 name, id, available_memory_mb
             );
             peers.insert(id, peer);
+            return true; // 新用户，返回 true
         }
     }
 

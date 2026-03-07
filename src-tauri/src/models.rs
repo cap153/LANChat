@@ -55,10 +55,7 @@ impl From<Message> for MessageResponse {
                     .and_then(|n| n.to_str())
                     .unwrap_or("");
 
-                // 提取文件 ID（如果路径包含 UUID）
-                let file_id = filename.split('_').next().unwrap_or(filename);
-
-                response.file_id = Some(file_id.to_string());
+                response.file_id = Some(filename.to_string()); // 直接使用文件名作为 file_id
                 response.file_name = Some(msg.content.clone()); // content 存储的是文件名
                 response.file_path = Some(path.clone());
                 response.file_status = msg.file_status.clone();

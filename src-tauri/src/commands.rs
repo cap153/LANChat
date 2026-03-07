@@ -271,20 +271,16 @@ async fn upload_file_internal<R: tokio::io::AsyncRead + Unpin>(
 
 #[tauri::command]
 pub async fn get_my_name(state: State<'_, DbState>) -> Result<String, String> {
-    println!("[Command] 收到前端请求: get_my_name");
     crate::db::get_username(&state.pool).await
 }
 
 #[tauri::command]
 pub async fn get_my_id(state: State<'_, DbState>) -> Result<String, String> {
-    println!("[Command] 收到前端请求: get_my_id");
     crate::db::get_user_id(&state.pool).await
 }
 
 #[tauri::command]
 pub async fn get_settings(state: State<'_, DbState>) -> Result<serde_json::Value, String> {
-    println!("[Command] 收到前端请求: get_settings");
-
     let download_path = crate::db::get_download_path(&state.pool).await?;
 
     Ok(serde_json::json!({
@@ -297,8 +293,6 @@ pub async fn update_settings(
     state: State<'_, DbState>,
     download_path: Option<String>,
 ) -> Result<(), String> {
-    println!("[Command] 收到前端请求: update_settings");
-
     if let Some(path) = download_path {
         crate::db::update_download_path(&state.pool, path).await?;
     }
@@ -308,11 +302,6 @@ pub async fn update_settings(
 
 #[tauri::command]
 pub async fn update_my_name(state: State<'_, DbState>, new_name: String) -> Result<String, String> {
-    println!(
-        "[Command] 收到前端请求: update_my_name, 新名字: {}",
-        new_name
-    );
-
     // 更新数据库
     crate::db::update_username(&state.pool, new_name.clone()).await?;
 
@@ -356,7 +345,17 @@ pub async fn get_chat_history(
     state: State<'_, DbState>,
     peer_id: String,
 ) -> Result<Vec<serde_json::Value>, String> {
-    crate::network::messaging::get_chat_history(&state.pool, &peer_id, 100).await
+    crate::network::messaging::get_chat_history(&state.pool, &peer_id, 10).await
+}
+
+#[tauri::command]
+pub async fn get_chat_history_with_offset(
+    state: State<'_, DbState>,
+    peer_id: String,
+    limit: i32,
+    offset: i32,
+) -> Result<Vec<serde_json::Value>, String> {
+    crate::network::messaging::get_chat_history_with_offset(&state.pool, &peer_id, limit, offset).await
 }
 
 #[tauri::command]
@@ -484,8 +483,6 @@ pub async fn send_file(
 
 #[tauri::command]
 pub async fn get_theme_list() -> Result<Vec<serde_json::Value>, String> {
-    println!("[Command] 收到前端请求: get_theme_list");
-
     let mut themes = vec![
         serde_json::json!({
             "name": "default",
@@ -532,11 +529,6 @@ pub async fn get_theme_list() -> Result<Vec<serde_json::Value>, String> {
 
 #[tauri::command]
 pub async fn get_theme_css(theme_name: String) -> Result<String, String> {
-    println!(
-        "[Command] 收到前端请求: get_theme_css, 主题: {}",
-        theme_name
-    );
-
     if theme_name == "default" {
         return Ok(String::new()); // 默认主题返回空字符串
     }
@@ -579,11 +571,6 @@ pub async fn save_current_theme(
     state: State<'_, DbState>,
     theme_name: String,
 ) -> Result<(), String> {
-    println!(
-        "[Command] 收到前端请求: save_current_theme, 主题: {}",
-        theme_name
-    );
-
     // 保存当前主题到数据库
     crate::db::save_current_theme(&state.pool, theme_name.clone()).await?;
 
@@ -593,8 +580,6 @@ pub async fn save_current_theme(
 
 #[tauri::command]
 pub async fn get_current_theme(state: State<'_, DbState>) -> Result<String, String> {
-    println!("[Command] 收到前端请求: get_current_theme");
-
     let result = crate::db::get_current_theme(&state.pool).await?;
 
     let theme = result.unwrap_or_else(|| "default".to_string());
@@ -604,8 +589,6 @@ pub async fn get_current_theme(state: State<'_, DbState>) -> Result<String, Stri
 
 #[tauri::command]
 pub async fn get_default_download_path() -> Result<String, String> {
-    println!("[Command] 收到前端请求: get_default_download_path");
-
     if cfg!(target_os = "android") {
         // Android 的公共下载目录
         let download_path = "/storage/emulated/0/Download/LANChat";
@@ -622,8 +605,6 @@ pub async fn get_default_download_path() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn request_storage_permission() -> Result<bool, String> {
-    println!("[Command] 收到前端请求: request_storage_permission");
-
     #[cfg(target_os = "android")]
     {
         // Android 上需要请求存储权限
@@ -649,7 +630,6 @@ pub async fn save_file_message(
     file_path: String,
     status: String,
 ) -> Result<i64, String> {
-    println!("[Command] 收到前端请求: save_file_message");
     println!(
         "[Command] 文件: {}, 大小: {}, 状态: {}",
         file_name, file_size, status

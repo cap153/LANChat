@@ -12,15 +12,13 @@ pub struct DbState {
 }
 
 pub async fn get_username(pool: &sqlx::Pool<sqlx::Sqlite>) -> Result<String, String> {
-    println!("[DB] 正在从数据库读取用户名...");
     let res: (String,) = sqlx::query_as("SELECT value FROM settings WHERE key = 'username'")
         .fetch_one(pool)
         .await
         .map_err(|e| {
-            println!("[DB] 读取失败: {}", e);
+            eprintln!("[DB] 读取用户名失败: {}", e);
             e.to_string()
         })?;
-    println!("[DB] 读取成功: {}", res.0);
     Ok(res.0)
 }
 
@@ -505,19 +503,11 @@ pub async fn save_current_theme(
 
 /// 获取当前主题
 pub async fn get_current_theme(pool: &sqlx::Pool<sqlx::Sqlite>) -> Result<Option<String>, String> {
-    println!("[DB] 获取当前主题");
-
     let result =
         sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = 'current_theme'")
             .fetch_optional(pool)
             .await
             .map_err(|e| format!("查询主题失败: {}", e))?;
-
-    if let Some(theme) = &result {
-        println!("[DB] 当前主题: {}", theme);
-    } else {
-        println!("[DB] 未设置主题，使用默认值");
-    }
 
     Ok(result)
 }

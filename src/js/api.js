@@ -205,7 +205,6 @@ async function apiGetPeers() {
 			}
 
 			const text = await resp.text();
-			console.log("[JS-API] 收到响应:", text);
 
 			if (!text) {
 				console.warn("[JS-API] 响应为空");
@@ -264,14 +263,24 @@ async function apiSendMessage(peerId, peerAddr, content) {
 	}
 }
 
-// 获取聊天历史
-async function apiGetChatHistory(peerId) {
+// 获取聊天历史（支持分页）
+async function apiGetChatHistory(peerId, limit = 10, offset = 0) {
 	const tauri = getTauri();
 
 	if (tauri) {
 		// 桌面端
 		try {
-			return await tauri.core.invoke('get_chat_history', { peerId });
+			if (offset > 0) {
+				// 使用带偏移量的版本
+				return await tauri.core.invoke('get_chat_history_with_offset', { 
+					peerId, 
+					limit, 
+					offset 
+				});
+			} else {
+				// 使用默认版本
+				return await tauri.core.invoke('get_chat_history', { peerId });
+			}
 		} catch (e) {
 			console.error("[JS-API] 获取历史消息失败:", e);
 			return [];
@@ -279,7 +288,10 @@ async function apiGetChatHistory(peerId) {
 	} else {
 		// Web 端
 		try {
-			const resp = await fetch(`/api/chat_history/${peerId}`);
+			// 始终传递 limit 和 offset 参数
+			const url = `/api/chat_history/${peerId}?limit=${limit}&offset=${offset}`;
+			
+			const resp = await fetch(url);
 
 			if (!resp.ok) {
 				console.error("[JS-API] HTTP 错误:", resp.status, resp.statusText);
@@ -287,7 +299,6 @@ async function apiGetChatHistory(peerId) {
 			}
 
 			const text = await resp.text();
-			console.log("[JS-API] 收到历史消息响应:", text.substring(0, 200));
 
 			if (!text) {
 				console.warn("[JS-API] 响应为空");

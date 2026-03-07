@@ -145,17 +145,21 @@ pub async fn start_listening(
                 }
 
                 let peer_addr = format!("{}:{}", addr.ip(), peer_port);
-                println!(
-                    "[UDP] 发现用户: {} ({}) at {} (可用内存: {} MB)",
-                    name, peer_id, peer_addr, available_memory_mb
-                );
-
-                peer_manager.add_or_update_with_memory(
+                
+                let is_new_or_reconnected = peer_manager.add_or_update_with_memory(
                     peer_id.clone(),
                     name.clone(),
                     peer_addr.clone(),
                     available_memory_mb,
                 );
+
+                // 只在新用户或重新上线时打印日志
+                if is_new_or_reconnected {
+                    println!(
+                        "[UDP] 发现用户: {} ({}) at {} (可用内存: {} MB)",
+                        name, peer_id, peer_addr, available_memory_mb
+                    );
+                }
 
                 if let Some(app_handle) = &app {
                     let _ = app_handle.emit("new-peer", serde_json::json!({

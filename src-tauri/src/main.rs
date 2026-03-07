@@ -33,6 +33,7 @@ fn main() {
             lanchat::commands::get_peers,
             lanchat::commands::send_message,
             lanchat::commands::get_chat_history,
+            lanchat::commands::get_chat_history_with_offset,
             lanchat::commands::send_file,
             lanchat::commands::get_settings,
             lanchat::commands::update_settings,
