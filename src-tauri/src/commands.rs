@@ -921,16 +921,28 @@ pub async fn read_clipboard_files() -> Result<Vec<String>, String> {
     
     #[cfg(not(target_os = "android"))]
     {
+        // 1. 优先尝试 Wayland (仅 Linux)
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(files) = try_read_wayland_clipboard().await {
+                if !files.is_empty() {
+                    println!("[Command] ✓ 通过 Wayland 读取到 {} 个文件", files.len());
+                    return Ok(files);
+                }
+            }
+        }
+        
+        // 2. Fallback: 使用 clipboard-rs
+        println!("[Command] 尝试使用 clipboard-rs");
         use clipboard_rs::{Clipboard, ClipboardContext};
         
         let ctx = ClipboardContext::new()
             .map_err(|e| format!("创建剪贴板上下文失败: {}", e))?;
         
-        // 检查剪贴板中是否有文件
         let files = ctx.get_files()
             .map_err(|e| format!("读取剪贴板文件失败: {}", e))?;
         
-        println!("[Command] 剪贴板中的文件: {:?}", files);
+        println!("[Command] ✓ 通过 clipboard-rs 读取到 {} 个文件", files.len());
         Ok(files)
     }
     
@@ -938,6 +950,67 @@ pub async fn read_clipboard_files() -> Result<Vec<String>, String> {
     {
         Err("Android 不支持此功能".to_string())
     }
+}
+
+// Wayland 剪贴板读取（仅 Linux）
+#[cfg(all(feature = "desktop", target_os = "linux"))]
+async fn try_read_wayland_clipboard() -> Result<Vec<String>, String> {
+    use wl_clipboard_rs::paste::{get_contents, ClipboardType, MimeType, Seat};
+    use std::io::Read;
+    
+    println!("[Command] 尝试通过 Wayland 读取剪贴板");
+    
+    // 尝试读取 text/uri-list MIME 类型（文件列表）
+    let result = get_contents(
+        ClipboardType::Regular,
+        Seat::Unspecified,
+        MimeType::Specific("text/uri-list")
+    );
+    
+    match result {
+        Ok((mut pipe, _mime_type)) => {
+            let mut contents = String::new();
+            pipe.read_to_string(&mut contents)
+                .map_err(|e| format!("读取管道失败: {}", e))?;
+            
+            // 解析 URI 列表
+            let files: Vec<String> = contents
+                .lines()
+                .filter(|line| !line.is_empty() && line.starts_with("file://"))
+                .map(|line| line.to_string())
+                .collect();
+            
+            if files.is_empty() {
+                println!("[Command] Wayland 剪贴板中没有文件");
+                Err("剪贴板中没有文件".to_string())
+            } else {
+                println!("[Command] Wayland 剪贴板中的文件: {:?}", files);
+                Ok(files)
+            }
+        }
+        Err(wl_clipboard_rs::paste::Error::NoSeats) => {
+            println!("[Command] Wayland: 没有可用的 seat");
+            Err("没有可用的 seat".to_string())
+        }
+        Err(wl_clipboard_rs::paste::Error::ClipboardEmpty) => {
+            println!("[Command] Wayland: 剪贴板为空");
+            Err("剪贴板为空".to_string())
+        }
+        Err(wl_clipboard_rs::paste::Error::NoMimeType) => {
+            println!("[Command] Wayland: 剪贴板中没有 text/uri-list 类型");
+            Err("剪贴板中没有文件".to_string())
+        }
+        Err(e) => {
+            println!("[Command] Wayland 读取失败: {:?}", e);
+            Err(format!("Wayland 读取失败: {:?}", e))
+        }
+    }
+}
+
+// 非 Linux 平台的空实现
+#[cfg(all(feature = "desktop", not(target_os = "linux")))]
+async fn try_read_wayland_clipboard() -> Result<Vec<String>, String> {
+    Err("Wayland 仅在 Linux 上可用".to_string())
 }
 
 // Web 端的空实现
