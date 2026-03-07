@@ -17,9 +17,3 @@ commands.allow = ["clear_android_shared_files"]
 identifier = "allow-send-file-from-fd"
 description = "允许从文件描述符发送文件"
 commands.allow = ["send_file_from_fd"]
-
-[[permission]]
-identifier = "allow-send-file-from-uri"
-description = "允许从 URI 发送文件"
-commands.allow = ["send_file_from_uri"]
-
