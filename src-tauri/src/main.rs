@@ -43,7 +43,12 @@ fn main() {
             lanchat::commands::get_default_download_path,
             lanchat::commands::request_storage_permission,
             lanchat::commands::save_file_message,
-            lanchat::commands::open_file_location
+            lanchat::commands::open_file_location,
+            lanchat::commands::set_android_shared_files,
+            lanchat::commands::get_android_shared_files,
+            lanchat::commands::clear_android_shared_files,
+            lanchat::commands::send_file_from_uri,
+            lanchat::commands::send_file_from_fd
         ])
         // --------------------------
         .setup(|app| {
@@ -125,6 +130,9 @@ fn main() {
                 handle.manage(lanchat::commands::PeerState {
                     manager: peer_manager.clone(),
                 });
+                
+                // 注册 Android 分享状态
+                handle.manage(lanchat::commands::AndroidShareState::new());
 
                 let h1 = handle.clone();
                 let id1 = my_id.clone();

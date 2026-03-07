@@ -48,6 +48,18 @@ fn calculate_optimal_chunk_size(_file_size: usize) -> usize {
     chunk_size
 }
 
+#[cfg(not(feature = "desktop"))]
+fn calculate_optimal_chunk_size(file_size: usize) -> usize {
+    // 移动端简化版本：根据文件大小选择分块大小
+    if file_size < 100 * 1024 * 1024 {
+        50 * 1024 * 1024 // < 100MB: 50MB 分块
+    } else if file_size < 500 * 1024 * 1024 {
+        100 * 1024 * 1024 // 100-500MB: 100MB 分块
+    } else {
+        200 * 1024 * 1024 // > 500MB: 200MB 分块
+    }
+}
+
 #[tauri::command]
 pub async fn get_my_name(state: State<'_, DbState>) -> Result<String, String> {
     println!("[Command] 收到前端请求: get_my_name");
@@ -623,3 +635,584 @@ pub async fn open_file_location(app: tauri::AppHandle, file_path: String) -> Res
 pub async fn open_file_location(_app: tauri::AppHandle, _file_path: String) -> Result<(), String> {
     Err("此功能仅在桌面端支持".to_string())
 }
+
+#[tauri::command]
+pub async fn set_android_shared_files(
+    app: tauri::AppHandle,
+    files: Vec<serde_json::Value>,
+) -> Result<(), String> {
+    println!("[Command] set_android_shared_files 被调用，文件数: {}", files.len());
+    
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        
+        if let Some(share_state) = app.try_state::<AndroidShareState>() {
+            share_state.set_files(files);
+            println!("[Command] 文件已保存到状态");
+            return Ok(());
+        }
+        
+        println!("[Command] 没有找到分享状态");
+        Err("分享状态未初始化".to_string())
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, files);
+        Err("此功能仅在 Android 上可用".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn get_android_shared_files(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    println!("[Command] get_android_shared_files 被调用");
+    
+    #[cfg(target_os = "android")]
+    {
+        // 在 Android 上，从 MainActivity 获取分享文件
+        // 通过 Tauri 的事件系统或状态管理获取
+        // 这里我们使用一个全局状态来存储分享文件
+        
+        use tauri::Manager;
+        
+        // 尝试从应用状态获取分享文件
+        if let Some(share_state) = app.try_state::<AndroidShareState>() {
+            let files = share_state.get_files();
+            println!("[Command] 从状态获取到 {} 个文件", files.len());
+            return Ok(files);
+        }
+        
+        println!("[Command] 没有找到分享状态");
+        Ok(vec![])
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Err("此功能仅在 Android 上可用".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn clear_android_shared_files(app: tauri::AppHandle) -> Result<(), String> {
+    println!("[Command] clear_android_shared_files 被调用");
+    
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        
+        if let Some(share_state) = app.try_state::<AndroidShareState>() {
+            share_state.clear_files();
+            println!("[Command] 已清除分享文件");
+        }
+        
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Err("此功能仅在 Android 上可用".to_string())
+    }
+}
+
+// Android 分享状态管理
+#[cfg(target_os = "android")]
+pub struct AndroidShareState {
+    files: std::sync::Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+}
+
+#[cfg(target_os = "android")]
+impl AndroidShareState {
+    pub fn new() -> Self {
+        Self {
+            files: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+        }
+    }
+    
+    pub fn set_files(&self, files: Vec<serde_json::Value>) {
+        if let Ok(mut f) = self.files.lock() {
+            *f = files;
+            println!("[AndroidShareState] 已设置 {} 个文件", f.len());
+        }
+    }
+    
+    pub fn get_files(&self) -> Vec<serde_json::Value> {
+        if let Ok(f) = self.files.lock() {
+            println!("[AndroidShareState] 获取 {} 个文件", f.len());
+            f.clone()
+        } else {
+            Vec::new()
+        }
+    }
+    
+    pub fn clear_files(&self) {
+        if let Ok(mut f) = self.files.lock() {
+            f.clear();
+            println!("[AndroidShareState] 已清除文件");
+        }
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+pub struct AndroidShareState;
+
+#[cfg(not(target_os = "android"))]
+impl AndroidShareState {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[tauri::command]
+pub async fn send_file_from_uri(
+    app: tauri::AppHandle,
+    state: State<'_, DbState>,
+    #[allow(non_snake_case)]
+    peerId: String,
+    #[allow(non_snake_case)]
+    peerAddr: String,
+    uri: String,
+    #[allow(non_snake_case)]
+    fileName: String,
+    #[allow(non_snake_case)]
+    fileSize: usize,
+) -> Result<serde_json::Value, String> {
+    println!(
+        "[Command] 收到从 URI 发送文件请求: uri={}, name={}, size={}, to={}",
+        uri, fileName, fileSize, peerAddr
+    );
+
+    #[cfg(target_os = "android")]
+    {
+        // 在 Android 上，使用 JNI 从 content:// URI 获取文件描述符
+        use crate::android_fd::AndroidFile;
+        use tokio::io::AsyncReadExt;
+
+        // 从 content URI 获取文件描述符
+        let android_file = match AndroidFile::from_content_uri(&uri) {
+            Ok(f) => f,
+            Err(e) => {
+                println!("[Command] 无法从 URI 获取文件描述符: {}, 错误: {}", uri, e);
+                return Err(format!("无法打开文件: {}", e));
+            }
+        };
+
+        println!("[Command] 成功从 URI 获取文件描述符: {}", uri);
+        
+        // 转换为 tokio 文件对象
+        let std_file = android_file.into_file();
+        let mut file = tokio::fs::File::from_std(std_file);
+
+        // 立即创建数据库记录
+        let message_id = match crate::db::save_file_message(
+            &state.pool,
+            peerId.clone(),
+            fileName.clone(),
+            fileSize,
+            uri.clone(),
+            "uploading".to_string(),
+        )
+        .await
+        {
+            Ok(id) => {
+                println!("[Command] ✓ 已创建上传中记录，ID: {}", id);
+                Some(id)
+            }
+            Err(e) => {
+                eprintln!("[Command] ✗ 创建上传记录失败: {}", e);
+                None
+            }
+        };
+
+        // 获取自己的 ID
+        let my_id = crate::db::get_user_id(&state.pool).await?;
+
+        // 获取接收方的可用内存
+        let receiver_memory_mb = if let Some(peer_state) = app.try_state::<PeerState>() {
+            let peers = peer_state.manager.get_all_peers();
+            peers
+                .iter()
+                .find(|p| {
+                    p.addr
+                        .starts_with(&peerAddr.split(':').next().unwrap_or(""))
+                })
+                .map(|p| p.available_memory_mb)
+                .unwrap_or(1024)
+        } else {
+            1024
+        };
+
+        println!("[Command] 接收方可用内存: {} MB", receiver_memory_mb);
+
+        // 计算分块大小
+        let chunk_size = calculate_optimal_chunk_size(fileSize);
+        let adjusted_chunk_size = std::cmp::min(
+            chunk_size,
+            std::cmp::max(
+                50 * 1024 * 1024,
+                receiver_memory_mb as usize * 1024 * 1024 / 4,
+            ),
+        );
+
+        let total_chunks = (fileSize + adjusted_chunk_size - 1) / adjusted_chunk_size;
+
+        println!(
+            "[Command] 开始分块上传: 文件大小={}, 分块大小={}, 总分块数={}",
+            fileSize, adjusted_chunk_size, total_chunks
+        );
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .map_err(|e| format!("创建客户端失败: {}", e))?;
+
+        let upload_url = format!("http://{}/api/upload", peerAddr);
+
+        let mut offset = 0;
+        let mut chunk_index = 0;
+        let start_time = std::time::Instant::now();
+
+        loop {
+            // 读取分块
+            let mut buf = vec![0u8; adjusted_chunk_size];
+            let mut bytes_read = 0;
+
+            while bytes_read < adjusted_chunk_size {
+                let n = file
+                    .read(&mut buf[bytes_read..])
+                    .await
+                    .map_err(|e| format!("读取文件失败: {}", e))?;
+
+                if n == 0 {
+                    break;
+                }
+
+                bytes_read += n;
+            }
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            buf.truncate(bytes_read);
+            let n = bytes_read;
+
+            // 构造 multipart 请求
+            let form = reqwest::multipart::Form::new()
+                .text("peer_id", my_id.clone())
+                .text("file_name", fileName.clone())
+                .text("file_size", fileSize.to_string())
+                .text("chunk_index", chunk_index.to_string())
+                .text("chunk_total", total_chunks.to_string())
+                .part(
+                    "chunk",
+                    reqwest::multipart::Part::bytes(buf.clone())
+                        .mime_str("application/octet-stream")
+                        .map_err(|e| format!("设置 MIME 类型失败: {}", e))?,
+                );
+
+            println!(
+                "[Command] 上传分块 {}/{}, 大小: {} 字节",
+                chunk_index + 1,
+                total_chunks,
+                n
+            );
+
+            let response = client.post(&upload_url).multipart(form).send().await.map_err(|e| {
+                if let Some(id) = message_id {
+                    let pool = state.pool.clone();
+                    tokio::spawn(async move {
+                        let _ = crate::db::delete_message_by_id(&pool, id).await;
+                    });
+                }
+                format!("上传分块失败: {}", e)
+            })?;
+
+            if !response.status().is_success() {
+                let error_text = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "无法读取错误信息".to_string());
+                eprintln!("[Command] ✗ 上传分块失败: {}", error_text);
+
+                if let Some(id) = message_id {
+                    let _ = crate::db::delete_message_by_id(&state.pool, id).await;
+                }
+
+                return Err(format!("上传分块失败: {}", error_text));
+            }
+
+            offset += n;
+            chunk_index += 1;
+
+            // 打印进度
+            let elapsed = start_time.elapsed().as_secs_f64();
+            if elapsed > 0.0 {
+                let speed = offset as f64 / (1024.0 * 1024.0) / elapsed;
+                println!(
+                    "[Command] 已上传: {} MB, 速度: {:.2} MB/s",
+                    offset / (1024 * 1024),
+                    speed
+                );
+                let _ = app.emit(
+                    "upload_progress",
+                    serde_json::json!({
+                        "file_name": fileName.clone(),
+                        "speed_mb_s": speed
+                    }),
+                );
+            }
+        }
+
+        let total_time = start_time.elapsed().as_secs_f64();
+        let avg_speed = fileSize as f64 / (1024.0 * 1024.0) / total_time;
+        println!(
+            "[Command] ✓ 文件上传完成，耗时: {:.2}s, 平均速度: {:.2} MB/s",
+            total_time, avg_speed
+        );
+
+        // 更新数据库状态
+        if let Some(id) = message_id {
+            if let Err(e) = crate::db::update_file_status_by_id(&state.pool, id, "sent").await {
+                eprintln!("[Command] ⚠ 更新数据库状态失败: {}", e);
+            } else {
+                println!("[Command] ✓ 文件状态已更新为 sent");
+            }
+        }
+
+        Ok(serde_json::json!({
+            "success": true,
+            "file_name": fileName,
+            "file_size": fileSize,
+        }))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, state, peerId, peerAddr, uri, fileName, fileSize);
+        Err("此功能仅在 Android 上可用".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn send_file_from_fd(
+    app: tauri::AppHandle,
+    state: State<'_, DbState>,
+    #[allow(non_snake_case)]
+    peerId: String,
+    #[allow(non_snake_case)]
+    peerAddr: String,
+    #[allow(non_snake_case)]
+    fileName: String,
+    #[allow(non_snake_case)]
+    fileSize: usize,
+    fd: i32,
+) -> Result<serde_json::Value, String> {
+    println!(
+        "[Command] 收到从 FD 发送文件请求: fd={}, name={}, size={}, to={}",
+        fd, fileName, fileSize, peerAddr
+    );
+
+    #[cfg(target_os = "android")]
+    {
+        use crate::android_fd::AndroidFile;
+        use tokio::io::AsyncReadExt;
+
+        // 从 FD 创建文件对象
+        let android_file = AndroidFile::from_fd(fd)?;
+        let std_file = android_file.into_file();
+        let mut file = tokio::fs::File::from_std(std_file);
+
+        // 立即创建数据库记录
+        let message_id = match crate::db::save_file_message(
+            &state.pool,
+            peerId.clone(),
+            fileName.clone(),
+            fileSize,
+            format!("fd:{}", fd),
+            "uploading".to_string(),
+        )
+        .await
+        {
+            Ok(id) => {
+                println!("[Command] ✓ 已创建上传中记录，ID: {}", id);
+                Some(id)
+            }
+            Err(e) => {
+                eprintln!("[Command] ✗ 创建上传记录失败: {}", e);
+                None
+            }
+        };
+
+        // 获取自己的 ID
+        let my_id = crate::db::get_user_id(&state.pool).await?;
+
+        // 获取接收方的可用内存
+        let receiver_memory_mb = if let Some(peer_state) = app.try_state::<PeerState>() {
+            let peers = peer_state.manager.get_all_peers();
+            peers
+                .iter()
+                .find(|p| {
+                    p.addr
+                        .starts_with(&peerAddr.split(':').next().unwrap_or(""))
+                })
+                .map(|p| p.available_memory_mb)
+                .unwrap_or(1024)
+        } else {
+            1024
+        };
+
+        println!("[Command] 接收方可用内存: {} MB", receiver_memory_mb);
+
+        // 计算分块大小
+        let chunk_size = calculate_optimal_chunk_size(fileSize);
+        let adjusted_chunk_size = std::cmp::min(
+            chunk_size,
+            std::cmp::max(
+                50 * 1024 * 1024,
+                receiver_memory_mb as usize * 1024 * 1024 / 4,
+            ),
+        );
+
+        let total_chunks = (fileSize + adjusted_chunk_size - 1) / adjusted_chunk_size;
+
+        println!(
+            "[Command] 开始分块上传: 文件大小={}, 分块大小={}, 总分块数={}",
+            fileSize, adjusted_chunk_size, total_chunks
+        );
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .map_err(|e| format!("创建客户端失败: {}", e))?;
+
+        let upload_url = format!("http://{}/api/upload", peerAddr);
+
+        let mut offset = 0;
+        let mut chunk_index = 0;
+        let start_time = std::time::Instant::now();
+
+        loop {
+            // 读取分块
+            let mut buf = vec![0u8; adjusted_chunk_size];
+            let mut bytes_read = 0;
+
+            while bytes_read < adjusted_chunk_size {
+                let n = file
+                    .read(&mut buf[bytes_read..])
+                    .await
+                    .map_err(|e| format!("读取文件失败: {}", e))?;
+
+                if n == 0 {
+                    break;
+                }
+
+                bytes_read += n;
+            }
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            buf.truncate(bytes_read);
+            let n = bytes_read;
+
+            // 构造 multipart 请求
+            let form = reqwest::multipart::Form::new()
+                .text("peer_id", my_id.clone())
+                .text("file_name", fileName.clone())
+                .text("file_size", fileSize.to_string())
+                .text("chunk_index", chunk_index.to_string())
+                .text("chunk_total", total_chunks.to_string())
+                .part(
+                    "chunk",
+                    reqwest::multipart::Part::bytes(buf.clone())
+                        .mime_str("application/octet-stream")
+                        .map_err(|e| format!("设置 MIME 类型失败: {}", e))?,
+                );
+
+            println!(
+                "[Command] 上传分块 {}/{}, 大小: {} 字节",
+                chunk_index + 1,
+                total_chunks,
+                n
+            );
+
+            let response = client.post(&upload_url).multipart(form).send().await.map_err(|e| {
+                if let Some(id) = message_id {
+                    let pool = state.pool.clone();
+                    tokio::spawn(async move {
+                        let _ = crate::db::delete_message_by_id(&pool, id).await;
+                    });
+                }
+                format!("上传分块失败: {}", e)
+            })?;
+
+            if !response.status().is_success() {
+                let error_text = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "无法读取错误信息".to_string());
+                eprintln!("[Command] ✗ 上传分块失败: {}", error_text);
+
+                if let Some(id) = message_id {
+                    let _ = crate::db::delete_message_by_id(&state.pool, id).await;
+                }
+
+                return Err(format!("上传分块失败: {}", error_text));
+            }
+
+            offset += n;
+            chunk_index += 1;
+
+            // 打印进度
+            let elapsed = start_time.elapsed().as_secs_f64();
+            if elapsed > 0.0 {
+                let speed = offset as f64 / (1024.0 * 1024.0) / elapsed;
+                println!(
+                    "[Command] 已上传: {} MB, 速度: {:.2} MB/s",
+                    offset / (1024 * 1024),
+                    speed
+                );
+                let _ = app.emit(
+                    "upload_progress",
+                    serde_json::json!({
+                        "file_name": fileName.clone(),
+                        "speed_mb_s": speed
+                    }),
+                );
+            }
+        }
+
+        let total_time = start_time.elapsed().as_secs_f64();
+        let avg_speed = fileSize as f64 / (1024.0 * 1024.0) / total_time;
+        println!(
+            "[Command] ✓ 文件上传完成，耗时: {:.2}s, 平均速度: {:.2} MB/s",
+            total_time, avg_speed
+        );
+
+        // 更新数据库状态
+        if let Some(id) = message_id {
+            if let Err(e) = crate::db::update_file_status_by_id(&state.pool, id, "sent").await {
+                eprintln!("[Command] ⚠ 更新数据库状态失败: {}", e);
+            } else {
+                println!("[Command] ✓ 文件状态已更新为 sent");
+            }
+        }
+
+        Ok(serde_json::json!({
+            "success": true,
+            "file_name": fileName,
+            "file_size": fileSize,
+        }))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, state, peerId, peerAddr, fileName, fileSize, fd);
+        Err("此功能仅在 Android 上可用".to_string())
+    }
+}
+

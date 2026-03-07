@@ -1,0 +1,25 @@
+[[permission]]
+identifier = "allow-set-android-shared-files"
+description = "允许设置 Android 分享文件"
+commands.allow = ["set_android_shared_files"]
+
+[[permission]]
+identifier = "allow-get-android-shared-files"
+description = "允许获取 Android 分享文件"
+commands.allow = ["get_android_shared_files"]
+
+[[permission]]
+identifier = "allow-clear-android-shared-files"
+description = "允许清除 Android 分享文件"
+commands.allow = ["clear_android_shared_files"]
+
+[[permission]]
+identifier = "allow-send-file-from-fd"
+description = "允许从文件描述符发送文件"
+commands.allow = ["send_file_from_fd"]
+
+[[permission]]
+identifier = "allow-send-file-from-uri"
+description = "允许从 URI 发送文件"
+commands.allow = ["send_file_from_uri"]
+

@@ -1,7 +1,6 @@
 // lib.rs
-#[cfg(feature = "desktop")]
 pub mod commands;
-
+pub mod android_fd;
 pub mod db;
 pub mod models;
 pub mod network;
@@ -37,7 +36,13 @@ pub fn run() {
             commands::get_current_theme,
             commands::get_default_download_path,
             commands::request_storage_permission,
-            commands::save_file_message
+            commands::save_file_message,
+            commands::open_file_location,
+            commands::set_android_shared_files,
+            commands::get_android_shared_files,
+            commands::clear_android_shared_files,
+            commands::send_file_from_uri,
+            commands::send_file_from_fd
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -63,6 +68,9 @@ pub fn run() {
                 handle.manage(commands::PeerState {
                     manager: peer_manager.clone(),
                 });
+                
+                // 注册 Android 分享状态
+                handle.manage(commands::AndroidShareState::new());
 
                 let h1 = handle.clone();
                 let id1 = my_id.clone();

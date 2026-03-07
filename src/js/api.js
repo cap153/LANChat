@@ -791,3 +791,109 @@ async function apiGetCurrentTheme() {
 		return result.theme;
 	}
 }
+
+// Android 分享相关 API
+async function apiGetAndroidSharedFiles() {
+	console.log("[JS-API] apiGetAndroidSharedFiles 被调用");
+	
+	const tauri = getTauri();
+	
+	if (tauri) {
+		// 使用 Tauri 命令获取分享文件
+		try {
+			console.log("[JS-API] 通过 Tauri 命令获取分享文件");
+			const files = await tauri.core.invoke('get_android_shared_files');
+			console.log("[JS-API] Tauri 返回的文件:", files);
+			return files;
+		} catch (e) {
+			console.error("[JS-API] Tauri 命令失败:", e);
+		}
+	}
+	
+	// 降级方案：使用 window.Android
+	console.log("[JS-API] window.Android 存在:", !!window.Android);
+	
+	if (window.Android && window.Android.getPendingSharedFiles) {
+		try {
+			console.log("[JS-API] 调用 window.Android.getPendingSharedFiles()");
+			const jsonStr = window.Android.getPendingSharedFiles();
+			console.log("[JS-API] 返回的 JSON 字符串:", jsonStr);
+			const files = JSON.parse(jsonStr);
+			console.log("[JS-API] 解析后的文件:", files);
+			return files;
+		} catch (e) {
+			console.error("[JS-API] 获取 Android 分享文件失败:", e);
+			return [];
+		}
+	}
+	console.log("[JS-API] 所有方法都不可用，返回空数组");
+	return [];
+}
+
+async function apiClearAndroidSharedFiles() {
+	const tauri = getTauri();
+	
+	if (tauri) {
+		try {
+			await tauri.core.invoke('clear_android_shared_files');
+			return;
+		} catch (e) {
+			console.error("[JS-API] 清除分享文件失败:", e);
+		}
+	}
+	
+	if (window.Android && window.Android.clearPendingSharedFiles) {
+		window.Android.clearPendingSharedFiles();
+	}
+}
+
+async function apiSendFileFromAndroidUri(peerId, peerAddr, fileInfo) {
+	const tauri = getTauri();
+	
+	if (!tauri) {
+		throw new Error("Tauri 不可用");
+	}
+
+	try {
+		console.log("[JS-API] 从 Android URI 发送文件:", fileInfo);
+		console.log("[JS-API] peerId:", peerId, "peerAddr:", peerAddr);
+
+		// 确保文件名不为空
+		let fileName = fileInfo.fileName;
+		if (!fileName || fileName.trim() === '') {
+			// 根据 MIME 类型生成默认文件名
+			const timestamp = Date.now();
+			const ext = fileInfo.mimeType ? fileInfo.mimeType.split('/')[1] || 'dat' : 'dat';
+			fileName = `shared_file_${timestamp}.${ext}`;
+			console.log("[JS-API] 文件名为空，生成默认文件名:", fileName);
+		}
+
+		// 检查是否有文件描述符
+		if (fileInfo.fd && fileInfo.fd >= 0) {
+			console.log("[JS-API] 使用文件描述符发送: fd=" + fileInfo.fd);
+			
+			// 使用 FD 发送文件
+			const params = {
+				peerId: peerId,
+				peerAddr: peerAddr,
+				fileName: fileName,
+				fileSize: fileInfo.fileSize,
+				fd: fileInfo.fd
+			};
+			
+			console.log("[JS-API] 调用 send_file_from_fd，参数:", JSON.stringify(params));
+			
+			const result = await tauri.core.invoke('send_file_from_fd', params);
+			console.log("[JS-API] 文件发送成功:", result);
+			return result;
+		} else {
+			// 没有 FD，无法发送
+			console.error("[JS-API] 没有有效的文件描述符: fd=" + fileInfo.fd);
+			throw new Error("无法获取文件描述符，无法发送文件");
+		}
+	} catch (e) {
+		console.error("[JS-API] 从 Android URI 发送文件失败:", e);
+		throw e;
+	}
+}
+

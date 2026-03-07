@@ -99,6 +99,8 @@ function addUserToList(id, name, addr, isOffline = false) {
 	// 不存在,创建新的
 	const li = document.createElement('li');
 	li.dataset.id = id;
+	li.dataset.name = name;
+	li.dataset.addr = addr;
 	li.innerHTML = `
         <span class="user-name">${name}</span>
         <span class="user-addr">${addr}</span>

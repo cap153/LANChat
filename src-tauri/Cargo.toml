@@ -69,6 +69,8 @@ sysinfo = { version = "0.30", optional = true }
 [target.'cfg(target_os = "android")'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
 openssl-sys = { version = "0.9", features = ["vendored"] }
+jni = "0.21"
+ndk-context = "0.1"
 
 
 
