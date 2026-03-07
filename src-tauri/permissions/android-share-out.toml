@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-share-file-to-other-app"
+description = "允许分享文件到其他应用"
+commands.allow = ["share_file_to_other_app"]

@@ -812,10 +812,12 @@ pub async fn send_file_from_fd(
     #[allow(non_snake_case)]
     fileSize: usize,
     fd: i32,
+    #[allow(non_snake_case)]
+    originalUri: Option<String>,
 ) -> Result<serde_json::Value, String> {
     println!(
-        "[Command] 收到从 FD 发送文件请求: fd={}, name={}, size={}, to={}",
-        fd, fileName, fileSize, peerAddr
+        "[Command] 收到从 FD 发送文件请求: fd={}, name={}, size={}, uri={:?}, to={}",
+        fd, fileName, fileSize, originalUri, peerAddr
     );
 
     #[cfg(target_os = "android")]
@@ -827,6 +829,9 @@ pub async fn send_file_from_fd(
         let std_file = android_file.into_file();
         let file = tokio::fs::File::from_std(std_file);
 
+        // 使用原始 URI 作为 file_path（如果有），否则使用 fd:xxx
+        let file_path = originalUri.unwrap_or_else(|| format!("fd:{}", fd));
+
         // 使用统一的上传函数
         let peer_state = app.try_state::<PeerState>();
         upload_file_internal(
@@ -837,7 +842,7 @@ pub async fn send_file_from_fd(
             peerAddr,
             fileName.clone(),
             fileSize,
-            format!("fd:{}", fd),
+            file_path,
             file,
         )
         .await
@@ -845,9 +850,54 @@ pub async fn send_file_from_fd(
 
     #[cfg(not(target_os = "android"))]
     {
-        let _ = (app, state, peerId, peerAddr, fileName, fileSize, fd);
+        let _ = (app, state, peerId, peerAddr, fileName, fileSize, fd, originalUri);
         Err("此功能仅在 Android 上可用".to_string())
     }
+}
+
+// 分享文件到其他应用（仅 Android）
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub async fn share_file_to_other_app(
+    #[allow(non_snake_case)]
+    filePath: String,
+) -> Result<(), String> {
+    println!("[Command] 准备分享文件到其他应用: {}", filePath);
+    
+    use jni::objects::JValue;
+    
+    let context = ndk_context::android_context();
+    let vm = unsafe { jni::JavaVM::from_raw(context.vm().cast()) }
+        .map_err(|e| format!("获取 JavaVM 失败: {}", e))?;
+    
+    let mut env = vm.attach_current_thread()
+        .map_err(|e| format!("附加线程失败: {}", e))?;
+    
+    let activity = unsafe { jni::objects::JObject::from_raw(context.context().cast()) };
+    
+    let file_path_jstring = env.new_string(&filePath)
+        .map_err(|e| format!("创建字符串失败: {}", e))?;
+    
+    env.call_method(
+        activity,
+        "shareFile",
+        "(Ljava/lang/String;)V",
+        &[JValue::Object(&file_path_jstring)]
+    ).map_err(|e| format!("调用 shareFile 失败: {}", e))?;
+    
+    println!("[Command] 分享文件命令已发送到 Android");
+    Ok(())
+}
+
+// 非 Android 平台的空实现
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+pub async fn share_file_to_other_app(
+    #[allow(non_snake_case)]
+    filePath: String,
+) -> Result<(), String> {
+    let _ = filePath;
+    Err("此功能仅在 Android 上可用".to_string())
 }
 
 

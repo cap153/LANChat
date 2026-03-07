@@ -10,8 +10,10 @@ import android.provider.OpenableColumns
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
+import androidx.core.content.FileProvider
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 class MainActivity : TauriActivity() {
     private var pendingSharedFiles: List<SharedFileInfo>? = null
@@ -311,6 +313,61 @@ class MainActivity : TauriActivity() {
         } catch (e: Exception) {
             println("[MainActivity] 获取文件描述符失败: ${e.message}")
             -1
+        }
+    }
+
+    // 分享文件到其他应用
+    fun shareFile(filePath: String) {
+        try {
+            println("[MainActivity] 准备分享文件: $filePath")
+            
+            val uri: Uri
+            val mimeType: String
+            
+            if (filePath.startsWith("content://")) {
+                // 已经是 content URI，直接使用
+                uri = Uri.parse(filePath)
+                mimeType = contentResolver.getType(uri) ?: "*/*"
+                println("[MainActivity] 使用 content URI: $uri")
+            } else {
+                // 普通文件路径，使用 FileProvider
+                val file = File(filePath)
+                if (!file.exists()) {
+                    println("[MainActivity] 文件不存在: $filePath")
+                    return
+                }
+                
+                uri = FileProvider.getUriForFile(
+                    this,
+                    "${applicationContext.packageName}.fileprovider",
+                    file
+                )
+                mimeType = contentResolver.getType(uri) ?: "*/*"
+                println("[MainActivity] FileProvider URI: $uri")
+            }
+            
+            println("[MainActivity] MIME 类型: $mimeType")
+            
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = mimeType
+                putExtra(Intent.EXTRA_STREAM, uri)
+                // 添加读写权限标志
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
+            
+            // 创建分享选择器并授予权限
+            val chooser = Intent.createChooser(intent, "分享文件").apply {
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
+            
+            // 显示分享选择器
+            startActivity(chooser)
+            println("[MainActivity] 分享选择器已启动")
+        } catch (e: Exception) {
+            println("[MainActivity] 分享文件失败: ${e.message}")
+            e.printStackTrace()
         }
     }
 }

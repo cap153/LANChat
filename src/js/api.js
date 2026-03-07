@@ -654,7 +654,8 @@ async function apiSendFileFromAndroidUri(peerId, peerAddr, fileInfo) {
 				peerAddr: peerAddr,
 				fileName: fileName,
 				fileSize: fileInfo.fileSize,
-				fd: fileInfo.fd
+				fd: fileInfo.fd,
+				originalUri: fileInfo.uri || null  // 传递原始 URI
 			};
 			
 			console.log("[JS-API] 调用 send_file_from_fd，参数:", JSON.stringify(params));
@@ -669,6 +670,24 @@ async function apiSendFileFromAndroidUri(peerId, peerAddr, fileInfo) {
 		}
 	} catch (e) {
 		console.error("[JS-API] 从 Android URI 发送文件失败:", e);
+		throw e;
+	}
+}
+
+// 分享文件到其他应用（仅 Android）
+async function apiShareFileToOtherApp(filePath) {
+	const tauri = getTauri();
+	
+	if (!tauri) {
+		throw new Error("仅支持 Android 端");
+	}
+	
+	try {
+		console.log("[JS-API] 分享文件到其他应用:", filePath);
+		await tauri.core.invoke('share_file_to_other_app', { filePath });
+		console.log("[JS-API] 分享成功");
+	} catch (e) {
+		console.error("[JS-API] 分享文件失败:", e);
 		throw e;
 	}
 }

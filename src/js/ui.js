@@ -405,9 +405,24 @@ function addMessageToChat(message, isSent) {
             
             const tauri = window.__TAURI__;
             if (tauri) {
-                // 桌面端：点击打开文件所在位置
+                // 桌面端/Android：点击打开文件所在位置或分享
                 if (message.file_path) {
-                    fileContainer.addEventListener('click', () => openFileLocation(message.file_path));
+                    // 检查是否是 Android
+                    const isAndroid = navigator.userAgent.includes('Android');
+                    
+                    if (isAndroid) {
+                        // Android 端：所有文件都支持分享到其他应用
+                        fileContainer.addEventListener('click', async () => {
+                            try {
+                                await apiShareFileToOtherApp(message.file_path);
+                            } catch (e) {
+                                alert('分享失败: ' + e.message);
+                            }
+                        });
+                    } else {
+                        // 桌面端：点击打开文件位置
+                        fileContainer.addEventListener('click', () => openFileLocation(message.file_path));
+                    }
                 }
             } else {
                 // Web 端：点击下载文件

@@ -39,7 +39,8 @@
     "allow-get-android-shared-files",
     "allow-clear-android-shared-files",
     "allow-send-file-from-fd",
-    "allow-send-file-from-uri"
+    "allow-send-file-from-uri",
+    "allow-share-file-to-other-app"
   ],
   "scope": {
     "allow": [
