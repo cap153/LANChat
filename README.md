@@ -34,6 +34,10 @@ paru -S lanchat-bin
 
 [https://github.com/cap153/LANChat/releases](https://github.com/cap153/LANChat/releases) 
 
+### b友编译的iOS版本
+
+[https://pan.quark.cn/s/b89b4d8e8cbd](https://pan.quark.cn/s/b89b4d8e8cbd)
+
 ### 编译
 
 前置要求：
@@ -105,9 +109,12 @@ cargo build --release --bin lanchat-web --features web --no-default-features
 - [x] 桌面端文件消息点击打开所在路径
 - [x] Android 端接收其他应用分享的文件并发送
 - [x] Android 端文件消息点击分享到其他应用
+- [x] 桌面端、Web 端支持拖拽文件发送
+- [x] 桌面端支持粘贴文件发送（零拷贝，Wayland 优先）
+- [x] Web 端支持粘贴文件发送
+- [x] 图片消息自动预览
 
 ### 🚧 进行中
-- [ ] 桌面端、Web 端支持粘贴图片或文件
 - [ ] 删除历史聊天记录
 - [ ] 标注未读消息
 - [ ] 更换默认图标
