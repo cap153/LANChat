@@ -90,7 +90,7 @@ body {
 	line-height: 22px;
 	color: #ccc;
 	display: block;
-	margin-top: 5px;
+	margin-top: 0 !important;
 }
 
 #user-list li {
@@ -136,27 +136,38 @@ body {
 	background: var(--bg);
 }
 
+/* 1. 头部容器：作为高度的唯一仲裁者 */
 .chat-header {
-	height: 35px;
-	background: #2d2d2d;
-	display: flex;
-	align-items: center;
-	padding: 0;
-	border-bottom: none;
-	flex-shrink: 0;
+	height: 35px !important;       /* 强制固定高度 */
+	display: flex !important;
+	align-items: stretch !important; /* 【核心修复】强制所有子元素高度拉伸至 100% */
+	justify-content: flex-start !important;
+	padding: 0 !important;
+	background: #2d2d2d !important; /* 确保背景色统一 */
+	gap: 0 !important;
+	border: none !important;
 }
 
+/* 2. 文件名区域 */
 #chat-with-name {
-	background: var(--bg);
-	color: #fff;
-	height: 35px;
-	padding: 0 15px;
-	min-width: 100px;
-	display: flex;
-	align-items: center;
-	border-top: 1px solid #007acc;
-	font-size: 13px;
-	position: relative;
+	/* 布局与尺寸 */
+	flex: 0 1 auto !important;     /* 宽度自适应 */
+	width: auto !important;
+	height: auto !important;       /* 高度交给父级 stretch 控制 */
+	
+	/* 内部对齐 */
+	display: flex !important;
+	align-items: center !important; /* 只有里面的文字垂直居中 */
+	
+	/* 样式伪装 */
+	background: var(--bg) !important; 
+	border: none !important;       /* 移除边框 */
+	box-shadow: inset 0 1px 0 0 #007acc !important; /* 顶部蓝线 */
+	
+	/* 间距 */
+	margin: 0 !important;
+	padding-left: 10px !important;
+	padding-right: 2px !important; /* 紧贴右侧关闭按钮 */
 }
 
 #chat-with-name::after {
@@ -171,19 +182,36 @@ body {
 	font-family: serif;
 }
 
+/* 3. 关闭按钮 */
 #close-chat-btn {
-	background: transparent;
-	border: none;
-	color: #999;
-	margin-left: 10px;
-	cursor: pointer;
-	font-size: 14px;
+	/* 布局与尺寸 */
+	flex: 0 0 35px !important;     /* 固定宽度 */
+	height: auto !important;       /* 高度交给父级 stretch 控制 */
+	
+	/* 内部对齐 */
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	
+	/* 样式伪装 */
+	background: var(--bg) !important;
+	color: #999 !important;
+	border: none !important;       /* 移除边框 */
+	outline: none !important;
+	border-radius: 0 !important;
+	box-shadow: inset 0 1px 0 0 #007acc !important; /* 顶部蓝线 */
+	
+	/* 间距 */
+	margin: 0 !important;
+	padding: 0 !important;
 }
 
+/* 4. 关闭按钮悬停态 */
 #close-chat-btn:hover {
-	background: #444;
-	border-radius: 3px;
-	color: #fff;
+	background-color: #e81123 !important; /* 红色背景 */
+	color: #ffffff !important;
+	/* 悬停时，顶部的蓝线也要变成红色，保证视觉整体性 */
+	box-shadow: inset 0 1px 0 0 #e81123 !important; 
 }
 
 /* --- 4. 消息区域 (关键修复) --- */
@@ -705,6 +733,150 @@ body {
 #cancel-theme-btn:hover,
 #choose-path-btn:hover {
 	background: #4b4b4b;
+}
+
+/* =========================================
+   伪装 1：左侧列表未读消息 -> "未保存的文件"
+   ========================================= */
+#user-list li {
+	position: relative;
+}
+
+/* 覆盖默认的红色发光圆点，改为 VS Code 的未保存白点 */
+#user-list li::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	right: 15px;
+	transform: translateY(-50%) scale(0);
+	width: 8px;
+	height: 8px;
+	background-color: #cccccc;
+	/* VS Code 未保存指示器的标准灰白色 */
+	border-radius: 50%;
+	box-shadow: none;
+	/* 移除发光效果，代码编辑器不需要光污染 */
+	transition: transform 0.1s ease;
+	pointer-events: none;
+}
+
+#user-list li.has-unread::after {
+	transform: translateY(-50%) scale(1);
+}
+
+/* =========================================
+   伪装 2 & 3：回到底部按钮彻底重构 -> "VS Code 底部通知 (Toast)"
+   ========================================= */
+.scroll-bottom-btn {
+	/* 1. 绝对锁死定位 (180px的终端高度 + 15px间距 = 195px) */
+	position: absolute !important;
+	right: 20px !important;
+	left: auto !important;
+	bottom: 195px !important;
+	/* 彻底无视 JS 的干扰，永远固定在这里 */
+
+	/* 2. 尺寸与形状：关键修改点 */
+	width: 32px !important;
+	/* 设定相等的宽高 */
+	height: 32px !important;
+	/* 设定相等的宽高 */
+	padding: 0 !important;
+	/* 圆形按钮通常不需要内边距 */
+	border-radius: 50% !important;
+	/* 彻底变成圆形 */
+
+	/* 3. VS Code 风格配色 */
+	background: #252526 !important;
+	border: 1px solid #454545 !important;
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4) !important;
+
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	z-index: 9999 !important;
+
+	opacity: 0 !important;
+	visibility: hidden !important;
+	pointer-events: none !important;
+
+	transform: none !important;
+	transition: opacity 0.15s ease, background-color 0.1s ease !important;
+}
+
+/* 4. 直接隐藏掉原本丑陋的 SVG 箭头和巨大的蓝色圆点 */
+.scroll-bottom-btn svg,
+.scroll-bottom-btn .unread-dot {
+	display: none !important;
+}
+
+/* 5. 注入伪装文字：默认显示“滚动到底部” */
+.scroll-bottom-btn::after {
+	content: "↓";
+	font-family: var(--font) !important;
+	font-size: 12px !important;
+	color: #cccccc !important;
+}
+
+/* 6. 高级伪装：如果有未读新消息，改变文字和左边框 */
+/* (利用 CSS :has 伪类，当内部有红点时，变成 VS Code 的新通知样式) */
+.scroll-bottom-btn:has(.unread-dot.show) {
+	border-left: 3px solid #007acc !important;
+	/* VS Code 左侧蓝色强调线 */
+}
+
+.scroll-bottom-btn:has(.unread-dot.show)::after {
+	content: "New output available ↓";
+	color: #569cd6 !important;
+	/* VS Code 关键字蓝色 */
+}
+
+/* 悬停效果 */
+.scroll-bottom-btn:hover {
+	background: #2d2d2d !important;
+	border-color: #555555 !important;
+}
+
+.scroll-bottom-btn.show {
+	/* 【关键修复】：添加 show 类时恢复可见和点击 */
+	opacity: 1 !important;
+	visibility: visible !important;
+	pointer-events: auto !important;
+	transform: none !important;
+}
+
+/* =========================================
+   伪装 4：图片预览限制 -> "VS Code 图像查看器风格"
+   ========================================= */
+/* 确保图片不会跟代码文字挤在同一行 */
+.image-preview {
+	display: block !important;
+	width: 100% !important;
+	margin-top: 8px !important;
+	margin-bottom: 8px !important;
+}
+
+.image-preview img {
+	max-width: 320px !important;
+	/* 严格限制最大宽度 */
+	max-height: 250px !important;
+	/* 严格限制最大高度 */
+	object-fit: contain !important;
+	/* 保持图片比例 */
+
+	/* 伪装成在编辑器里打开图片文件的画框效果 */
+	background-color: transparent !important;
+	background-image:
+		linear-gradient(45deg, #2a2d2e 25%, transparent 25%, transparent 75%, #2a2d2e 75%, #2a2d2e),
+		linear-gradient(45deg, #2a2d2e 25%, transparent 25%, transparent 75%, #2a2d2e 75%, #2a2d2e) !important;
+	background-size: 10px 10px !important;
+	background-position: 0 0, 5px 5px !important;
+	/* 上面这一坨 background 代码是画出 VS Code 查看透明图片时的深色棋盘格背景 */
+
+	border: 1px solid #454545 !important;
+	border-radius: 3px !important;
+	padding: 4px !important;
+	box-sizing: border-box !important;
+	cursor: zoom-in !important;
 }
 
 /* 主题列表样式 */
