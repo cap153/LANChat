@@ -10,53 +10,50 @@ pub struct PeerState {
 }
 
 /// 根据设备内存和文件大小计算最优分块大小
-#[cfg(feature = "desktop")]
 fn calculate_optimal_chunk_size(_file_size: usize) -> usize {
-    use sysinfo::System;
+    #[cfg(feature = "desktop")]
+    {
+        use sysinfo::System;
 
-    let mut sys = System::new_all();
-    sys.refresh_all();
+        let mut sys = System::new_all();
+        sys.refresh_all();
 
-    // 获取可用内存（字节）
-    let available_memory = sys.available_memory() as usize * 1024; // sysinfo 返回的是 KB
+        // 获取可用内存（字节）
+        let available_memory = sys.available_memory() as usize * 1024; // sysinfo 返回的是 KB
 
-    // 使用可用内存的 80%（大胆使用内存以获得更快的速度）
-    let max_chunk_memory = available_memory * 80 / 100;
+        // 使用可用内存的 80%（大胆使用内存以获得更快的速度）
+        let max_chunk_memory = available_memory * 80 / 100;
 
-    // 动态计算分块大小：使用可用内存的 80%，但最小 50MB，最大 500MB
-    let chunk_size = std::cmp::max(
-        50 * 1024 * 1024, // 最小 50MB
-        std::cmp::min(
-            max_chunk_memory,  // 使用可用内存的 80%
-            500 * 1024 * 1024, // 最大 500MB
-        ),
-    );
+        // 动态计算分块大小：使用可用内存的 80%，但最小 50MB，最大 500MB
+        let chunk_size = std::cmp::max(
+            50 * 1024 * 1024, // 最小 50MB
+            std::cmp::min(
+                max_chunk_memory,  // 使用可用内存的 80%
+                500 * 1024 * 1024, // 最大 500MB
+            ),
+        );
 
-    println!(
-        "[Command] 系统可用内存: {} MB",
-        available_memory / (1024 * 1024)
-    );
-    println!(
-        "[Command] 内存预算: {} MB",
-        max_chunk_memory / (1024 * 1024)
-    );
-    println!(
-        "[Command] 计算的分块大小: {} MB",
-        chunk_size / (1024 * 1024)
-    );
+        println!(
+            "[Command] 系统可用内存: {} MB",
+            available_memory / (1024 * 1024)
+        );
+        println!(
+            "[Command] 内存预算: {} MB",
+            max_chunk_memory / (1024 * 1024)
+        );
+        println!(
+            "[Command] 计算的分块大小: {} MB",
+            chunk_size / (1024 * 1024)
+        );
 
-    chunk_size
-}
-
-#[cfg(not(feature = "desktop"))]
-fn calculate_optimal_chunk_size(file_size: usize) -> usize {
-    // 移动端简化版本：根据文件大小选择分块大小
-    if file_size < 100 * 1024 * 1024 {
-        50 * 1024 * 1024 // < 100MB: 50MB 分块
-    } else if file_size < 500 * 1024 * 1024 {
-        100 * 1024 * 1024 // 100-500MB: 100MB 分块
-    } else {
-        200 * 1024 * 1024 // > 500MB: 200MB 分块
+        chunk_size
+    }
+    
+    #[cfg(not(feature = "desktop"))]
+    {
+        // Web 端：使用保守的固定值
+        println!("[Command] Web 端使用固定分块大小: 100 MB");
+        100 * 1024 * 1024
     }
 }
 
