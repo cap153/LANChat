@@ -237,6 +237,9 @@ function initChat() {
 
 	// 粘贴文件功能
 	initPasteFile();
+
+	// 初始化回到底部按钮
+	initScrollToBottomBtn(); 
 }
 
 // --- 赛博加固版 JS ---
@@ -351,6 +354,9 @@ function addMessageToChat(message, isSent) {
     const chatMessages = document.getElementById('chat-messages');
     const messageDiv = createMessageElement(message, isSent);
     chatMessages.appendChild(messageDiv);
+    if (message.timestamp && message.timestamp > (window.lastMessageTimestamp || 0)) {
+        window.lastMessageTimestamp = message.timestamp;
+    }
 }
 
 // 创建文件图标元素
@@ -836,7 +842,15 @@ function onReceiveMessage(message) {
 				setTimeout(async () => {
 					await scrollToBottom();
 				}, 50);
-			}
+    } else {
+        // 【新增逻辑】如果用户往上翻看历史记录时来新消息了，点亮小红点
+        const unreadDot = document.getElementById('unread-dot');
+        const scrollBtn = document.getElementById('scroll-to-bottom-btn');
+        if (unreadDot && scrollBtn) {
+            scrollBtn.classList.add('show'); // 确保按钮显示出来
+            unreadDot.classList.add('show'); // 亮起红点
+        }
+    }
 		}
 	} else {
 		console.log('[UI] ✗ 不匹配当前聊天对象');
@@ -1739,4 +1753,52 @@ function initPasteFile() {
 
 	// 添加快捷键提示
 	console.log('[UI] Ctrl+V 粘贴文件功能已启用（支持零拷贝）');
+}
+
+// 初始化“回到底部”悬浮按钮
+function initScrollToBottomBtn() {
+    const chatContainer = document.querySelector('.chat-container');
+    const chatMessages = document.getElementById('chat-messages');
+    
+    if (!chatContainer || !chatMessages) return;
+
+    // 1. 动态创建按钮 DOM
+    const btn = document.createElement('div');
+    btn.id = 'scroll-to-bottom-btn';
+    btn.className = 'scroll-bottom-btn';
+    // 注入一个向下箭头的 SVG 图标 和 未读小红点
+    btn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <polyline points="19 12 12 19 5 12"></polyline>
+        </svg>
+        <div id="unread-dot" class="unread-dot"></div>
+    `;
+
+    // 将按钮插入到 chat-messages 的平级，输入框的上方
+    const inputContainer = document.querySelector('.chat-input-container');
+    chatContainer.insertBefore(btn, inputContainer);
+
+    // 2. 绑定点击事件：平滑滚动到底部
+    btn.addEventListener('click', () => {
+        chatMessages.scrollTo({
+            top: chatMessages.scrollHeight,
+            behavior: 'smooth' // 增加平滑滚动效果
+        });
+        // 隐藏未读红点
+        document.getElementById('unread-dot').classList.remove('show');
+    });
+
+    // 3. 监听滚动事件，控制显示/隐藏
+    chatMessages.addEventListener('scroll', () => {
+        // 距离底部 150px 以内都认为是在底部
+        const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 150;
+
+        if (isAtBottom) {
+            btn.classList.remove('show');
+            document.getElementById('unread-dot').classList.remove('show'); // 到达底部自动消除红点
+        } else {
+            btn.classList.add('show');
+        }
+    });
 }

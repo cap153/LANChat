@@ -21,7 +21,7 @@ required-features = ["web"]
 
 [features]
 default = ["desktop"]
-desktop = ["tauri", "tauri-plugin-shell", "tauri-plugin-fs", "tauri-plugin-dialog", "tauri-plugin-sql", "tauri-plugin-log", "tauri-plugin-single-instance", "tauri-plugin-opener", "tauri-build", "sysinfo", "clipboard-rs", "wl-clipboard-rs"]
+desktop = ["tauri", "tauri-plugin-shell", "tauri-plugin-fs", "tauri-plugin-dialog", "tauri-plugin-sql", "tauri-plugin-log", "tauri-plugin-single-instance", "tauri-plugin-opener", "tauri-build", "sysinfo"]
 web = ["sysinfo"]
 
 [build-dependencies]
@@ -64,8 +64,11 @@ dirs = "5.0"
 reqwest = { version = "0.12", features = ["multipart", "json"] }
 urlencoding = "2.1"
 sysinfo = { version = "0.30", optional = true }
-clipboard-rs = { version = "0.3.3", optional = true }
-wl-clipboard-rs = { version = "0.9", optional = true }
+
+# 剪贴板 - 仅桌面端（非 Android）
+[target.'cfg(not(target_os = "android"))'.dependencies]
+clipboard-rs = "0.3.3"
+wl-clipboard-rs = "0.9"
 
 # Android平台需要vendored OpenSSL
 [target.'cfg(target_os = "android")'.dependencies]

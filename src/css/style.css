@@ -945,6 +945,83 @@ h2::before {
 }
 
 /* =========================================
+   回到底部悬浮按钮 (Scroll to Bottom FAB)
+   ========================================= */
+.scroll-bottom-btn {
+	position: absolute;
+	/* 根据你的输入框高度动态定位，通常 90px 刚好在输入框上方 */
+	bottom: 90px;
+	right: 25px;
+	width: 42px;
+	height: 42px;
+	border-radius: 50%;
+	
+	/* 完美复用设置面板的玻璃拟态背景 */
+	background: rgba(40, 42, 54, 0.85); 
+	backdrop-filter: blur(10px);
+	border: 1px solid rgba(189, 147, 249, 0.3); /* 细微的紫色描边 */
+	color: var(--primary); /* 默认紫色图标 */
+	
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	z-index: 100;
+	
+	/* 隐藏状态的动画起点（向下偏移 + 透明） */
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(15px) scale(0.9);
+	transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); /* 果冻回弹动画 */
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* 显示状态 */
+.scroll-bottom-btn.show {
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(0) scale(1);
+}
+
+/* 悬停状态：实心紫 + 发光 */
+.scroll-bottom-btn:hover {
+	background: var(--primary);
+	color: #fff;
+	box-shadow: 0 0 15px rgba(189, 147, 249, 0.5);
+	transform: translateY(-2px) scale(1.05);
+}
+
+/* 未读消息小红点 */
+.unread-dot {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 10px;
+	height: 10px;
+	background: #ff5555; /* Dracula 红色 */
+	border-radius: 50%;
+	border: 2px solid #282a36; /* 边框与底色同色，产生镂空感 */
+	opacity: 0;
+	transform: scale(0);
+	transition: all 0.3s ease;
+}
+
+.unread-dot.show {
+	opacity: 1;
+	transform: scale(1);
+}
+
+/* 📱 移动端适配 */
+@media (max-width: 768px) {
+	.scroll-bottom-btn {
+		bottom: 80px; /* 移动端输入框较小，位置稍微下调 */
+		right: 15px;
+		width: 38px;
+		height: 38px;
+	}
+}
+
+/* =========================================
    分享文件弹窗样式 (Share Dialog)
    ========================================= */
 

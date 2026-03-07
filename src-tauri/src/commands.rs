@@ -987,8 +987,8 @@ async fn try_read_wayland_clipboard() -> Result<Vec<String>, String> {
     }
 }
 
-// 非 Linux 平台的空实现
-#[cfg(all(feature = "desktop", not(target_os = "linux")))]
+// 非 Linux 桌面平台的空实现
+#[cfg(all(feature = "desktop", not(target_os = "linux"), not(target_os = "android")))]
 async fn try_read_wayland_clipboard() -> Result<Vec<String>, String> {
     Err("Wayland 仅在 Linux 上可用".to_string())
 }
