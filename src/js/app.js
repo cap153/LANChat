@@ -184,35 +184,11 @@ async function handleShareToUser(userId, userName, userAddr, sharedFiles) {
         try {
             console.log("[JS-App] 发送文件:", fileInfo.fileName);
             
-            // 在聊天界面显示上传中状态
-            const chatBox = document.getElementById('chat-box');
-            if (chatBox) {
-                const msgDiv = document.createElement('div');
-                msgDiv.className = 'message sent';
-                msgDiv.innerHTML = `
-                    <div class="file-message">
-                        <span class="file-name">${fileInfo.fileName}</span>
-                        <span class="file-size">${formatFileSize(fileInfo.fileSize)}</span>
-                        <span class="file-status file-uploading">上传中...</span>
-                    </div>
-                `;
-                chatBox.appendChild(msgDiv);
-                chatBox.scrollTop = chatBox.scrollHeight;
-            }
-            
-            // 发送文件
+            // 发送文件（Rust 会自动创建数据库记录）
             await apiSendFileFromAndroidUri(userId, userAddr, fileInfo);
             
             console.log("[JS-App] 文件发送成功:", fileInfo.fileName);
             
-            // 更新状态为已发送
-            const statusSpans = document.querySelectorAll('.file-uploading');
-            statusSpans.forEach(span => {
-                if (span.previousElementSibling?.textContent === formatFileSize(fileInfo.fileSize)) {
-                    span.textContent = '已发送';
-                    span.classList.remove('file-uploading');
-                }
-            });
         } catch (e) {
             console.error("[JS-App] 文件发送失败:", fileInfo.fileName, e);
             alert(`发送文件失败: ${fileInfo.fileName}\n${e.message}`);
@@ -221,6 +197,10 @@ async function handleShareToUser(userId, userName, userAddr, sharedFiles) {
     
     // 清除待处理的分享文件
     apiClearAndroidSharedFiles();
+    
+    // 重新加载聊天历史以显示最新状态
+    console.log("[JS-App] 重新加载聊天历史");
+    await loadChatHistory(userId);
 }
 
 // 格式化文件大小
