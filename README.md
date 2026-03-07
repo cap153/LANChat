@@ -36,7 +36,7 @@ paru -S lanchat-bin
 
 ### b友编译的iOS版本
 
-[https://pan.quark.cn/s/b89b4d8e8cbd](https://pan.quark.cn/s/b89b4d8e8cbd)
+[https://github.com/cap153/LANChat/releases/download/v0.1.1/LANChat_0.1.1_aarch64.dmg](https://github.com/cap153/LANChat/releases/download/v0.1.1/LANChat_0.1.1_aarch64.dmg) 
 
 ### 编译
 
