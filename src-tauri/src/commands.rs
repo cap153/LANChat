@@ -1,13 +1,23 @@
 // commands.rs - Tauri 命令（桌面端和移动端共享）
+#[cfg(feature = "desktop")]
 use crate::db::DbState;
+
+#[cfg(feature = "desktop")]
 use crate::peers::{Peer, PeerManager};
+
+#[cfg(feature = "desktop")]
 use std::sync::Arc;
+
+#[cfg(feature = "desktop")]
 use tauri::{Emitter, Manager, State};
 
 // 用于管理 PeerManager 的状态
+#[cfg(feature = "desktop")]
 pub struct PeerState {
     pub manager: Arc<PeerManager>,
 }
+
+#[cfg(feature = "desktop")]
 
 /// 根据设备内存和文件大小计算最优分块大小
 fn calculate_optimal_chunk_size(_file_size: usize) -> usize {
@@ -659,12 +669,7 @@ pub async fn open_file_location(app: tauri::AppHandle, file_path: String) -> Res
     Ok(())
 }
 
-#[cfg(not(feature = "desktop"))]
-#[tauri::command]
-pub async fn open_file_location(_app: tauri::AppHandle, _file_path: String) -> Result<(), String> {
-    Err("此功能仅在桌面端支持".to_string())
-}
-
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn set_android_shared_files(
     app: tauri::AppHandle,
@@ -747,7 +752,7 @@ pub async fn clear_android_shared_files(app: tauri::AppHandle) -> Result<(), Str
 }
 
 // Android 分享状态管理
-#[cfg(target_os = "android")]
+#[cfg(all(feature = "desktop", target_os = "android"))]
 pub struct AndroidShareState {
     files: std::sync::Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
 }
@@ -784,10 +789,10 @@ impl AndroidShareState {
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(all(feature = "desktop", not(target_os = "android")))]
 pub struct AndroidShareState;
 
-#[cfg(not(target_os = "android"))]
+#[cfg(all(feature = "desktop", not(target_os = "android")))]
 impl AndroidShareState {
     pub fn new() -> Self {
         Self
@@ -1076,3 +1081,17 @@ pub async fn send_file_from_fd(
     }
 }
 
+
+// Web 端的空实现
+#[cfg(not(feature = "desktop"))]
+pub struct PeerState;
+
+#[cfg(not(feature = "desktop"))]
+pub struct AndroidShareState;
+
+#[cfg(not(feature = "desktop"))]
+impl AndroidShareState {
+    pub fn new() -> Self {
+        Self
+    }
+}

@@ -1,5 +1,7 @@
 // lib.rs
+#[cfg(feature = "desktop")]
 pub mod commands;
+
 pub mod android_fd;
 pub mod db;
 pub mod models;
