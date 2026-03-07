@@ -360,30 +360,44 @@ function addMessageToChat(message, isSent) {
         const fileContainer = document.createElement('div');
         fileContainer.className = 'message-file';
 
-        // 1. 图标 (默认主题需要，伪装模式会隐藏)
-        const fileIcon = document.createElement('span');
-        fileIcon.className = 'file-icon';
-        fileIcon.textContent = '📄';
+        // 检查是否是图片文件
+        const isImage = isImageFile(message.file_name || message.content);
 
-        // 2. 文件信息包装层 (为了方便默认主题垂直布局)
-        const fileInfo = document.createElement('div');
-        fileInfo.className = 'file-info';
+        if (isImage && message.file_path && (message.file_status === 'sent' || message.file_status === 'accepted')) {
+            // 图片预览
+            const imgPreview = document.createElement('div');
+            imgPreview.className = 'image-preview';
 
-        // 文件名
-        const fileName = document.createElement('div');
-        fileName.className = 'file-name';
-        fileName.textContent = message.file_name || message.content;
+            const img = document.createElement('img');
+            
+            const tauri = window.__TAURI__;
+            if (tauri) {
+                // 桌面端：使用 convertFileSrc
+                const assetUrl = tauri.core.convertFileSrc(message.file_path);
+                img.src = assetUrl;
+            } else {
+                // Web 端：使用下载 API
+                if (message.file_id) {
+                    img.src = `/api/download/${message.file_id}`;
+                }
+            }
 
-        // 文件大小 (找回消失的它！)
-        const fileSize = document.createElement('div');
-        fileSize.className = 'file-size';
-        fileSize.textContent = message.file_size ? formatFileSize(message.file_size) : '未知大小';
+            img.alt = message.file_name || message.content;
+            img.loading = 'lazy';
+            
+            // 图片加载失败时显示文件图标
+            img.onerror = () => {
+                imgPreview.innerHTML = '';
+                imgPreview.appendChild(createFileIcon(message));
+            };
 
-        fileInfo.appendChild(fileName);
-        fileInfo.appendChild(fileSize);
-        
-        fileContainer.appendChild(fileIcon);
-        fileContainer.appendChild(fileInfo);
+            imgPreview.appendChild(img);
+            fileContainer.appendChild(imgPreview);
+        } else {
+            // 非图片或未完成的文件：显示文件图标
+            fileContainer.appendChild(createFileIcon(message));
+        }
+
         contentDiv.appendChild(fileContainer);
 
         // 3. 状态标签 (保留类名，供默认模式显示圆点，伪装模式显示注释)
@@ -453,6 +467,49 @@ function addMessageToChat(message, isSent) {
     messageDiv.appendChild(contentDiv);
     messageDiv.appendChild(timeDiv);
     chatMessages.appendChild(messageDiv);
+}
+
+// 创建文件图标元素
+function createFileIcon(message) {
+    const fileInfo = document.createElement('div');
+    fileInfo.className = 'file-info-wrapper';
+
+    // 1. 图标
+    const fileIcon = document.createElement('span');
+    fileIcon.className = 'file-icon';
+    fileIcon.textContent = '📄';
+
+    // 2. 文件信息
+    const fileInfoText = document.createElement('div');
+    fileInfoText.className = 'file-info';
+
+    // 文件名
+    const fileName = document.createElement('div');
+    fileName.className = 'file-name';
+    fileName.textContent = message.file_name || message.content;
+
+    // 文件大小
+    const fileSize = document.createElement('div');
+    fileSize.className = 'file-size';
+    fileSize.textContent = message.file_size ? formatFileSize(message.file_size) : '未知大小';
+
+    fileInfoText.appendChild(fileName);
+    fileInfoText.appendChild(fileSize);
+    
+    fileInfo.appendChild(fileIcon);
+    fileInfo.appendChild(fileInfoText);
+
+    return fileInfo;
+}
+
+// 检查是否是图片文件
+function isImageFile(fileName) {
+    if (!fileName) return false;
+    
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'];
+    const lowerFileName = fileName.toLowerCase();
+    
+    return imageExtensions.some(ext => lowerFileName.endsWith(ext));
 }
 
 // 加载聊天历史

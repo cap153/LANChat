@@ -697,3 +697,21 @@ async function apiShareFileToOtherApp(filePath) {
 	}
 }
 
+
+// 分享文件到其他应用（仅 Android）
+async function apiShareFileToOtherApp(filePath) {
+	const tauri = getTauri();
+	
+	if (!tauri) {
+		throw new Error("仅支持 Android 端");
+	}
+	
+	try {
+		console.log("[JS-API] 分享文件到其他应用:", filePath);
+		await tauri.core.invoke('share_file_to_other_app', { filePath });
+		console.log("[JS-API] 分享成功");
+	} catch (e) {
+		console.error("[JS-API] 分享文件失败:", e);
+		throw e;
+	}
+}

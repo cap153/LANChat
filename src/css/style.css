@@ -1474,3 +1474,56 @@ h2::before {
 		border-color: rgba(189, 147, 249, 0.8);
 	}
 }
+
+/* 图片预览样式 */
+.image-preview {
+	max-width: 300px;
+	overflow: hidden;
+	margin-bottom: 8px;
+}
+
+.image-preview img {
+	width: 100%;
+	height: auto;
+	object-fit: contain;
+	display: block;
+	background: rgba(0, 0, 0, 0.05);
+}
+
+/* 文件信息包装器 */
+.file-info-wrapper {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+/* 调整文件消息的布局 */
+.message-file {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+/* 图片预览时的点击提示 */
+.message-file:hover .image-preview {
+	opacity: 0.9;
+	transition: opacity 0.2s;
+}
+
+/* 图片消息特殊样式：移除边框和背景 */
+.message-content:has(.image-preview) {
+	background: transparent !important;
+	padding: 0 !important;
+	border: none !important;
+}
+
+.message-file:has(.image-preview) {
+	background: transparent !important;
+	border: none !important;
+	padding: 0 !important;
+}
+
+.message-file:has(.image-preview):hover {
+	background: transparent !important;
+	border: none !important;
+}
