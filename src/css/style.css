@@ -944,6 +944,163 @@ h2::before {
 	background: rgba(255, 255, 255, 0.3);
 }
 
+/* =========================================
+   分享文件弹窗样式 (Share Dialog)
+   ========================================= */
+
+/* 1. 全屏遮罩层：居中对齐，带暗色模糊背景 */
+.share-dialog {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.6);
+	backdrop-filter: blur(5px);
+	z-index: 2000; /* 确保在最顶层 */
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+/* 2. 弹窗主面板：复用设置面板的玻璃拟态风格 */
+.share-dialog-content {
+	width: 380px;
+	max-width: 90%;
+	background: rgba(40, 42, 54, 0.95); /* var(--bg-panel) */
+	backdrop-filter: blur(20px);
+	border: 1px solid rgba(189, 147, 249, 0.3); /* 紫色微弱描边 */
+	border-radius: 20px;
+	padding: 30px;
+	box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+	/* 复用你之前写好的 popIn 动画 */
+	animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+	display: flex;
+	flex-direction: column;
+}
+
+/* 3. 标题与副标题 */
+.share-dialog-content h3 {
+	margin-top: 0;
+	color: var(--primary);
+	font-size: 20px;
+	margin-bottom: 8px;
+}
+
+.share-dialog-content p {
+	margin: 0 0 20px 0;
+	color: var(--text-dim);
+	font-size: 13px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	padding-bottom: 15px;
+}
+
+/* 4. 用户列表：限制高度，超出滚动 */
+.share-user-list {
+	list-style: none;
+	padding: 0;
+	margin: 0 0 20px 0;
+	max-height: 250px; /* 防止用户太多撑爆屏幕 */
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+/* 定制用户列表的滚动条 */
+.share-user-list::-webkit-scrollbar {
+	width: 4px;
+}
+.share-user-list::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.1);
+	border-radius: 4px;
+}
+
+/* 5. 用户列表项：卡片化交互 */
+.share-user-list li {
+	padding: 14px 16px;
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid rgba(255, 255, 255, 0.05);
+	border-radius: 12px;
+	cursor: pointer;
+	color: var(--text-main);
+	font-weight: 500;
+	font-size: 14px;
+	transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+	display: flex;
+	align-items: center;
+}
+
+/* 既然只展示在线用户，我们在名字前加一个绿色的在线呼吸点，增加精致感 */
+.share-user-list li::before {
+	content: '';
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	background: #50fa7b; /* 你的 success 绿 */
+	border-radius: 50%;
+	margin-right: 12px;
+	box-shadow: 0 0 8px rgba(80, 250, 123, 0.4);
+	flex-shrink: 0;
+}
+
+/* 悬停效果：泛紫、浮起 */
+.share-user-list li:hover {
+	background: rgba(189, 147, 249, 0.15);
+	border-color: rgba(189, 147, 249, 0.4);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	color: var(--primary);
+}
+
+/* 6. 没有在线用户时的空状态占位 */
+.share-user-list li.no-users {
+	justify-content: center;
+	color: var(--text-dim);
+	background: transparent;
+	border: 1px dashed rgba(255, 255, 255, 0.15);
+	cursor: default;
+}
+.share-user-list li.no-users::before {
+	display: none; /* 隐藏绿点 */
+}
+.share-user-list li.no-users:hover {
+	background: transparent;
+	border-color: rgba(255, 255, 255, 0.15);
+	transform: none;
+	box-shadow: none;
+	color: var(--text-dim);
+}
+
+/* 7. 取消按钮：与你原有设置面板的 Cancel 按钮完全一致 */
+.share-dialog-content .cancel-btn {
+	width: 100%;
+	background: rgba(255, 255, 255, 0.05);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	color: #b3b3b3;
+	padding: 12px;
+	border-radius: 8px;
+	cursor: pointer;
+	font-weight: 600;
+	transition: all 0.2s;
+	font-size: 14px;
+	min-height: 44px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.share-dialog-content .cancel-btn:hover {
+	background: rgba(255, 255, 255, 0.1);
+	color: #fff;
+}
+
 /* --- 📱 竖屏/移动端适配 --- */
 @media (max-width: 768px) {
 	.container {

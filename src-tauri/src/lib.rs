@@ -43,7 +43,6 @@ pub fn run() {
             commands::set_android_shared_files,
             commands::get_android_shared_files,
             commands::clear_android_shared_files,
-            commands::send_file_from_uri,
             commands::send_file_from_fd
         ])
         .setup(|app| {
